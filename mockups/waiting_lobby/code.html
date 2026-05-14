@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Waiting Lobby</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;700;800&amp;family=Nunito+Sans:wght@400;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed-variant": "#1f5100",
+                        "inverse-primary": "#6be026",
+                        "on-primary-container": "#1e5000",
+                        "surface-container-highest": "#dde5d2",
+                        "on-primary-fixed": "#082100",
+                        "error-container": "#ffdad6",
+                        "secondary": "#006590",
+                        "surface-card": "#FFFFFF",
+                        "surface-bright": "#f4fce8",
+                        "primary-container": "#58cc02",
+                        "inverse-on-surface": "#ecf4e0",
+                        "outline": "#6f7b64",
+                        "surface-background": "#F7F7F7",
+                        "secondary-fixed-dim": "#88ceff",
+                        "on-tertiary-container": "#7b1f60",
+                        "surface-container-lowest": "#ffffff",
+                        "reward-gold": "#FFC800",
+                        "primary-fixed": "#87fe45",
+                        "error": "#ba1a1a",
+                        "on-tertiary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed-variant": "#7d2061",
+                        "on-primary": "#ffffff",
+                        "on-background": "#171e12",
+                        "on-surface-variant": "#3f4a36",
+                        "tertiary-container": "#ff8ed4",
+                        "background": "#f4fce8",
+                        "danger-red": "#FF4B4B",
+                        "outline-variant": "#becbb1",
+                        "tertiary-fixed": "#ffd8eb",
+                        "on-surface": "#171e12",
+                        "on-secondary-container": "#004666",
+                        "surface": "#f4fce8",
+                        "surface-dim": "#d5ddca",
+                        "tertiary-fixed-dim": "#ffaedd",
+                        "on-error": "#ffffff",
+                        "inverse-surface": "#2b3326",
+                        "secondary-fixed": "#c8e6ff",
+                        "surface-container-high": "#e3ebd8",
+                        "primary": "#2b6c00",
+                        "secondary-container": "#2fb8ff",
+                        "on-secondary-fixed": "#001e2e",
+                        "surface-container": "#e9f1dd",
+                        "surface-variant": "#dde5d2",
+                        "surface-container-low": "#eef7e3",
+                        "on-secondary-fixed-variant": "#004c6e",
+                        "text-secondary": "#777777",
+                        "primary-fixed-dim": "#6be026",
+                        "text-primary": "#2B2B2B",
+                        "on-secondary": "#ffffff",
+                        "surface-tint": "#2b6c00",
+                        "on-tertiary-fixed": "#3b002c",
+                        "tertiary": "#9a397a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px",
+                        "2xl": "1rem",
+                        "3xl": "1.5rem"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "lg": "32px",
+                        "xs": "8px",
+                        "sm": "16px",
+                        "xl": "48px",
+                        "unit": "8px",
+                        "md": "24px",
+                        "container-margin": "24px",
+                        "xxl": "64px"
+                    },
+                    "fontFamily": {
+                        "label-bold": ["Lexend"],
+                        "body-md": ["Nunito Sans"],
+                        "body-lg": ["Nunito Sans"],
+                        "headline-lg": ["Nunito Sans"],
+                        "timer-display-mobile": ["Lexend"],
+                        "headline-xl": ["Nunito Sans"],
+                        "headline-xl-mobile": ["Nunito Sans"],
+                        "timer-display": ["Lexend"]
+                    },
+                    "fontSize": {
+                        "label-bold": ["14px", { "lineHeight": "20px", "fontWeight": "700" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                        "timer-display-mobile": ["48px", { "lineHeight": "56px", "fontWeight": "800" }],
+                        "headline-xl": ["48px", { "lineHeight": "56px", "fontWeight": "800" }],
+                        "headline-xl-mobile": ["32px", { "lineHeight": "40px", "fontWeight": "800" }],
+                        "timer-display": ["72px", { "lineHeight": "80px", "letterSpacing": "-0.02em", "fontWeight": "800" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .thick-shadow {
+            box-shadow: 0 4px 0 var(--tw-shadow-color);
+        }
+        .soft-card-shadow {
+            box-shadow: 0 8px 24px -4px rgba(0,0,0,0.12);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface-background text-on-background antialiased min-h-screen flex flex-col font-body-md">
+<!-- TopAppBar -->
+<header class="bg-surface text-primary font-headline-lg-mobile text-headline-lg-mobile docked full-width top-0 bg-surface flat no shadows flex justify-between items-center w-full px-container-margin py-xs max-w-7xl mx-auto z-40 sticky top-0 md:font-headline-lg md:text-headline-lg">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary hover:opacity-80 transition-opacity cursor-pointer">leaderboard</span>
+</div>
+<div class="font-headline-lg-mobile text-headline-lg-mobile font-black text-primary md:font-headline-lg md:text-headline-lg text-center flex-1">
+            Treasure Hunt
+        </div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary hover:opacity-80 transition-opacity cursor-pointer">stars</span>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 w-full max-w-7xl mx-auto px-container-margin py-xl flex flex-col gap-xl pb-32">
+<!-- Timer Section -->
+<section class="flex flex-col items-center justify-center text-center">
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-text-primary mb-sm md:font-headline-lg md:text-headline-lg">Game Starts In:</h1>
+<div class="bg-surface-card soft-card-shadow rounded-3xl py-md px-xl inline-flex items-center justify-center border-4 border-primary-container relative overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12 opacity-50"></div>
+<span class="font-timer-display-mobile text-timer-display-mobile text-primary relative z-10 md:font-timer-display md:text-timer-display">
+                    04:52
+                </span>
+</div>
+<p class="font-body-md text-body-md text-text-secondary mt-sm">Waiting for other teams to join...</p>
+</section>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter md:gap-md">
+<!-- Team Members Card (Span 7 on desktop) -->
+<section class="md:col-span-7 bg-surface-card rounded-3xl soft-card-shadow p-lg flex flex-col gap-md border border-outline-variant/30">
+<div class="flex items-center gap-xs pb-sm border-b border-surface-variant">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">groups</span>
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-text-primary md:font-headline-lg md:text-headline-lg">Your Squad</h2>
+<span class="ml-auto font-label-bold text-label-bold text-primary-container bg-primary-container/10 px-sm py-1 rounded-full">3 / 4 Ready</span>
+</div>
+<div class="flex flex-col gap-sm">
+<!-- Member 1 -->
+<div class="flex items-center justify-between p-sm bg-surface-background rounded-2xl border border-surface-variant">
+<div class="flex items-center gap-sm">
+<div class="w-12 h-12 rounded-full bg-tertiary-container flex items-center justify-center text-on-tertiary-container font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg font-black">
+                                A
+                            </div>
+<div>
+<div class="font-label-bold text-label-bold text-text-primary">Alex</div>
+<div class="font-body-md text-body-md text-text-secondary text-sm">Captain</div>
+</div>
+</div>
+<span class="material-symbols-outlined text-primary-container" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<!-- Member 2 -->
+<div class="flex items-center justify-between p-sm bg-surface-background rounded-2xl border border-surface-variant">
+<div class="flex items-center gap-sm">
+<div class="w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg font-black">
+                                J
+                            </div>
+<div>
+<div class="font-label-bold text-label-bold text-text-primary">Jordan</div>
+<div class="font-body-md text-body-md text-text-secondary text-sm">Navigator</div>
+</div>
+</div>
+<span class="material-symbols-outlined text-primary-container" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<!-- Member 3 -->
+<div class="flex items-center justify-between p-sm bg-surface-background rounded-2xl border border-surface-variant">
+<div class="flex items-center gap-sm">
+<div class="w-12 h-12 rounded-full bg-reward-gold flex items-center justify-center text-on-surface font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg font-black">
+                                S
+                            </div>
+<div>
+<div class="font-label-bold text-label-bold text-text-primary">Sam</div>
+<div class="font-body-md text-body-md text-text-secondary text-sm">Decoder</div>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline">pending</span>
+</div>
+</div>
+<button class="mt-auto w-full bg-surface-container-high text-primary font-label-bold text-label-bold py-sm rounded-full thick-shadow shadow-surface-variant hover:bg-surface-variant transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">person_add</span>
+                    Invite Friend
+                </button>
+</section>
+<!-- Game Rules Card (Span 5 on desktop) -->
+<section class="md:col-span-5 bg-primary text-on-primary rounded-3xl soft-card-shadow p-lg flex flex-col gap-md relative overflow-hidden">
+<!-- Decorative background elements -->
+<div class="absolute -right-8 -top-8 w-32 h-32 bg-primary-fixed-dim/20 rounded-full blur-2xl"></div>
+<div class="absolute -left-8 -bottom-8 w-32 h-32 bg-secondary/20 rounded-full blur-2xl"></div>
+<div class="flex items-center gap-xs pb-sm border-b border-primary-fixed-dim/30 relative z-10">
+<span class="material-symbols-outlined text-reward-gold" style="font-variation-settings: 'FILL' 1;">menu_book</span>
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg">Game Rules</h2>
+</div>
+<ul class="flex flex-col gap-sm relative z-10">
+<li class="flex items-start gap-sm p-sm bg-primary-container/20 rounded-2xl backdrop-blur-sm">
+<span class="material-symbols-outlined text-reward-gold mt-1">speed</span>
+<div>
+<div class="font-label-bold text-label-bold text-on-primary">Race Against Time</div>
+<div class="font-body-md text-body-md text-inverse-on-surface/80 text-sm">Complete challenges before the clock runs out to earn bonus multipliers.</div>
+</div>
+</li>
+<li class="flex items-start gap-sm p-sm bg-primary-container/20 rounded-2xl backdrop-blur-sm">
+<span class="material-symbols-outlined text-reward-gold mt-1">location_on</span>
+<div>
+<div class="font-label-bold text-label-bold text-on-primary">Stay Together</div>
+<div class="font-body-md text-body-md text-inverse-on-surface/80 text-sm">All team members must be within 50m of the checkpoint to unlock clues.</div>
+</div>
+</li>
+<li class="flex items-start gap-sm p-sm bg-primary-container/20 rounded-2xl backdrop-blur-sm">
+<span class="material-symbols-outlined text-reward-gold mt-1">lightbulb</span>
+<div>
+<div class="font-label-bold text-label-bold text-on-primary">Use Hints Wisely</div>
+<div class="font-body-md text-body-md text-inverse-on-surface/80 text-sm">You only get 3 hints per game. Using a hint reduces your final score.</div>
+</div>
+</li>
+</ul>
+</section>
+</div>
+<!-- Ready Button -->
+<div class="flex justify-center mt-sm">
+<button class="w-full max-w-md bg-primary-container text-on-primary-container font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg py-sm rounded-full thick-shadow shadow-on-primary-container hover:brightness-105 active:translate-y-1 active:shadow-none transition-all flex items-center justify-center gap-xs">
+                I'm Ready
+                <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden bg-surface-container-lowest text-primary font-label-bold text-label-bold docked full-width bottom-0 rounded-t-xl border-t-4 border-surface-container-highest shadow-lg fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-xs py-sm pb-6">
+<!-- Active Tab: Hunt (Assuming waiting lobby is part of the Hunt flow) -->
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-xl px-4 py-2 border-b-4 border-on-primary-container translate-y-1 transition-all duration-100" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">explore</span>
+<span class="mt-1">Hunt</span>
+</a>
+<!-- Inactive Tabs -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-2 hover:bg-surface-container-high rounded-xl transition-colors" href="#">
+<span class="material-symbols-outlined">map</span>
+<span class="mt-1">Map</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-2 hover:bg-surface-container-high rounded-xl transition-colors" href="#">
+<span class="material-symbols-outlined">military_tech</span>
+<span class="mt-1">League</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-2 hover:bg-surface-container-high rounded-xl transition-colors" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="mt-1">Profile</span>
+</a>
+</nav>
+</body></html>
