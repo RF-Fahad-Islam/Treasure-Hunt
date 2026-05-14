@@ -1,28 +1,36 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Reveal, WordReveal } from "./Reveal";
-
-type LookupResult = {
-  roll: string;
-  team: string;
-  captain: string;
-  members: string[];
-  station: string;
-};
+import { Dashboard, type DashboardData, type HuntStatus } from "./Dashboard";
 
 type Status = "idle" | "loading" | "success" | "error";
+
+const ROLL_MIN = 0;
+const ROLL_MAX = 100;
+
+function isValidRoll(raw: string): boolean {
+  if (!/^\d+$/.test(raw)) return false;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= ROLL_MIN && n <= ROLL_MAX;
+}
 
 export function RollLookup() {
   const [roll, setRoll] = useState("");
   const [status, setStatus] = useState<Status>("idle");
-  const [result, setResult] = useState<LookupResult | null>(null);
+  const [result, setResult] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const sectionRef = useRef<HTMLElement>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     const trimmed = roll.trim();
     if (!trimmed) {
       setError("Enter your roll to continue.");
+      setStatus("error");
+      return;
+    }
+    if (!isValidRoll(trimmed)) {
+      setError(`Roll must be a whole number from ${ROLL_MIN} to ${ROLL_MAX}.`);
       setStatus("error");
       return;
     }
@@ -42,52 +50,57 @@ export function RollLookup() {
       }
       setResult(data);
       setStatus("success");
+      requestAnimationFrame(() => {
+        sectionRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
     } catch {
       setError("Something broke on our end. Try again in a moment.");
       setStatus("error");
     }
   }
 
-  function reset() {
-    setStatus("idle");
-    setResult(null);
-    setError(null);
-    setRoll("");
-  }
-
   return (
-    <section id="roll" className="relative px-5 py-24 sm:px-8 sm:py-32">
+    <section
+      id="roll"
+      ref={sectionRef}
+      className="relative px-5 py-24 sm:px-8 sm:py-32"
+    >
       <div className="mx-auto max-w-2xl">
-        <div className="text-center">
-          <Reveal
-            duration={0.6}
-            className="inline-block rounded-full bg-[#58CC02]/12 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#3A8400] dark:bg-transparent dark:px-0 dark:py-0 dark:text-white/45"
-          >
-            Your Hunt Begins Here
-          </Reveal>
-          <h2 className="mt-4 font-display text-[clamp(2rem,7vw,3.25rem)] font-extrabold leading-tight tracking-tight text-[#2B2B2B] dark:text-white">
-            <WordReveal text="Find your" />{" "}
-            <WordReveal
-              text="team."
-              className="gradient-text"
+        {status !== "success" && (
+          <div className="text-center">
+            <Reveal
+              duration={0.6}
+              className="inline-block rounded-full bg-[#58CC02]/12 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#3A8400] dark:bg-transparent dark:px-0 dark:py-0 dark:text-white/45"
+            >
+              Your Hunt Begins Here
+            </Reveal>
+            <h2 className="mt-4 font-display text-[clamp(2rem,7vw,3.25rem)] font-extrabold leading-tight tracking-tight text-[#2B2B2B] dark:text-white">
+              <WordReveal text="Find your" />{" "}
+              <WordReveal
+                text="team."
+                className="gradient-text"
+                delay={0.2}
+              />
+            </h2>
+            <Reveal
               delay={0.2}
-            />
-          </h2>
-          <Reveal
-            delay={0.2}
-            className="mx-auto mt-4 max-w-md text-[17px] font-semibold leading-relaxed text-[#777] dark:text-white/65 sm:text-base"
-          >
-            Enter your student roll. We'll pull up your team, your
-            captain, and your squad.
-          </Reveal>
-        </div>
+              className="mx-auto mt-4 max-w-md text-[17px] font-semibold leading-relaxed text-[#777] dark:text-white/65 sm:text-base"
+            >
+              Enter your student roll (0–100). We'll load your team and
+              your hunt dashboard.
+            </Reveal>
+          </div>
+        )}
 
         <motion.div
           initial={{ opacity: 0, y: 36, rotateX: -22, scale: 0.96 }}
           whileInView={{ opacity: 1, y: 0, rotateX: 0, scale: 1 }}
           viewport={{ once: true, margin: "-80px" }}
           transition={{ duration: 0.9, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-          className="relative mt-10 sm:mt-12"
+          className={`relative ${status !== "success" ? "mt-10 sm:mt-12" : "mt-4"}`}
           style={{
             perspective: "1400px",
             transformStyle: "preserve-3d",
@@ -104,9 +117,7 @@ export function RollLookup() {
             }}
           />
 
-          <div
-            className="relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-5 shadow-[0_4px_0_rgba(0,0,0,0.06)] sm:p-7 dark:border-white/10 dark:bg-[#0b0717]/80 dark:shadow-none dark:backdrop-blur-xl"
-          >
+          <div className="relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-5 shadow-[0_4px_0_rgba(0,0,0,0.06)] sm:p-7 dark:border-white/10 dark:bg-[#0b0717]/80 dark:shadow-none dark:backdrop-blur-xl">
             <AnimatePresence mode="wait" initial={false}>
               {status !== "success" ? (
                 <motion.form
@@ -122,28 +133,33 @@ export function RollLookup() {
                     htmlFor="roll-input"
                     className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#777] dark:text-white/55"
                   >
-                    Student Roll
+                    Student Roll (0–100)
                   </label>
 
                   <div className="relative">
                     <input
                       id="roll-input"
-                      type="text"
-                      inputMode="text"
+                      type="number"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      min={ROLL_MIN}
+                      max={ROLL_MAX}
+                      step={1}
                       autoComplete="off"
-                      autoCapitalize="characters"
-                      spellCheck={false}
-                      placeholder="e.g. 30-001"
+                      placeholder="e.g. 42"
                       value={roll}
                       onChange={(e) => {
-                        setRoll(e.target.value);
+                        // Strip non-digits in case browser permits them.
+                        const cleaned = e.target.value.replace(/\D/g, "");
+                        // Cap length so they can't paste huge numbers.
+                        setRoll(cleaned.slice(0, 3));
                         if (status === "error") {
                           setStatus("idle");
                           setError(null);
                         }
                       }}
                       disabled={status === "loading"}
-                      className="w-full rounded-2xl border-2 border-black/8 bg-[#FAFAFA] px-4 py-4 font-display text-2xl font-extrabold tracking-wider text-[#2B2B2B] placeholder:font-sans placeholder:text-base placeholder:font-semibold placeholder:tracking-normal placeholder:text-[#BBB] focus:border-[#58CC02] focus:bg-white focus:outline-none sm:py-5 sm:text-3xl dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:placeholder:text-white/30 dark:focus:border-white/25 dark:focus:bg-white/[0.07]"
+                      className="w-full appearance-none rounded-2xl border-2 border-black/8 bg-[#FAFAFA] px-4 py-4 font-display text-2xl font-extrabold tabular-nums tracking-wider text-[#2B2B2B] placeholder:font-sans placeholder:text-base placeholder:font-semibold placeholder:tracking-normal placeholder:text-[#BBB] focus:border-[#58CC02] focus:bg-white focus:outline-none sm:py-5 sm:text-3xl dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:placeholder:text-white/30 dark:focus:border-white/25 dark:focus:bg-white/[0.07] [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden"
                     />
                     {status === "loading" && (
                       <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
@@ -164,7 +180,7 @@ export function RollLookup() {
                       </>
                     ) : (
                       <>
-                        <span>Reveal my team</span>
+                        <span>Enter the hunt</span>
                         <Arrow />
                       </>
                     )}
@@ -184,107 +200,13 @@ export function RollLookup() {
                   </AnimatePresence>
                 </motion.form>
               ) : (
-                <ResultCard
-                  key="result"
-                  result={result!}
-                  onReset={reset}
-                />
+                <Dashboard key="dashboard" data={result!} />
               )}
             </AnimatePresence>
           </div>
         </motion.div>
       </div>
     </section>
-  );
-}
-
-function ResultCard({
-  result,
-  onReset,
-}: {
-  result: LookupResult;
-  onReset: () => void;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.4 }}
-      className="flex flex-col gap-5"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#777] dark:text-white/45">
-          Roll {result.roll}
-        </span>
-        <button
-          onClick={onReset}
-          className="text-[12px] font-bold text-[#1CB0F6] underline-offset-4 transition hover:underline dark:text-white/55"
-        >
-          Search another
-        </button>
-      </div>
-
-      <div>
-        <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#777] dark:text-white/45">
-          Your team
-        </div>
-        <div className="mt-1.5 font-display text-3xl font-extrabold tracking-tight gradient-text sm:text-4xl">
-          {result.team}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <InfoTile label="Captain" value={result.captain} accent="green" />
-        <InfoTile label="Start station" value={result.station} accent="blue" />
-      </div>
-
-      <div>
-        <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#777] dark:text-white/45">
-          Squad
-        </div>
-        <ul className="mt-2 grid gap-1.5">
-          {result.members.map((m) => (
-            <li
-              key={m}
-              className="flex items-center gap-2 rounded-2xl border border-black/5 bg-[#FAFAFA] px-3 py-2.5 text-[15px] font-semibold text-[#2B2B2B] dark:border-white/5 dark:bg-white/[0.02] dark:text-white/85"
-            >
-              <Dot />
-              {m}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </motion.div>
-  );
-}
-
-function InfoTile({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent: "green" | "blue";
-}) {
-  const bg = accent === "green" ? "bg-[#E8FFD1]" : "bg-[#DCF1FE]";
-  const fg = accent === "green" ? "text-[#3A8400]" : "text-[#0E6E9C]";
-  return (
-    <div
-      className={`rounded-2xl ${bg} px-4 py-3 dark:bg-white/[0.03] dark:ring-1 dark:ring-white/10`}
-    >
-      <div
-        className={`text-[10px] font-extrabold uppercase tracking-[0.22em] ${fg} opacity-80 dark:text-white/45`}
-      >
-        {label}
-      </div>
-      <div
-        className={`mt-1 font-display text-base font-extrabold tracking-tight ${fg} dark:text-white sm:text-lg`}
-      >
-        {value}
-      </div>
-    </div>
   );
 }
 
@@ -329,31 +251,43 @@ function Arrow() {
   );
 }
 
-function Dot() {
-  return (
-    <span
-      className="inline-block h-2 w-2 rounded-full"
-      style={{
-        background: "#58CC02",
-      }}
-    />
-  );
-}
-
-// Temporary placeholder until backend hooks up.
-async function mockLookup(roll: string): Promise<LookupResult | null> {
+// Placeholder until the backend is live. Demo data + a "not found" branch
+// so the error state is testable: try roll 99 to hit it.
+async function mockLookup(roll: string): Promise<DashboardData | null> {
   await new Promise((r) => setTimeout(r, 900));
-  if (roll.toLowerCase() === "demo") return null;
+  if (roll === "99") return null;
+
+  const now = Date.now();
+  const timerEndsAt = now + 18 * 60 * 1000 + 23 * 1000;
+
+  const status: HuntStatus = "Active Hunt";
+
   return {
     roll,
     team: "The Ghost Bytes",
-    captain: "Rafsan Hossain",
-    station: "Curzon Hall · Gate 2",
     members: [
       "Rafsan Hossain (Captain)",
       "Nabila Karim",
       "Tahmid Rahman",
       "Sumaiya Akter",
+      "Arman Chowdhury",
+    ],
+    clue:
+      "Where books sleep quietly and knowledge wakes — beneath the dome that watches over every restless student.",
+    points: 1200,
+    penalties: 200,
+    status,
+    timerEndsAt,
+    rank: 4,
+    standings: [
+      { rank: 1, team: "Team Nova", score: 2800 },
+      { rank: 2, team: "Team Alpha", score: 2450 },
+      { rank: 3, team: "Team Echo", score: 2100 },
+      { rank: 4, team: "The Ghost Bytes", score: 1900, you: true },
+      { rank: 5, team: "Team Bravo", score: 1700 },
+      { rank: 6, team: "Team Delta", score: 1550 },
+      { rank: 7, team: "Team Quasar", score: 1380 },
+      { rank: 8, team: "Team Helix", score: 1240 },
     ],
   };
 }

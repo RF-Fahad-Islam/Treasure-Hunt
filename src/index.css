@@ -69,6 +69,15 @@ body,
 html {
   -webkit-tap-highlight-color: transparent;
   scroll-behavior: smooth;
+  /* Soft anchor snapping. Proximity = only snaps when you stop near a section,
+     never yanks you mid-scroll. scroll-padding-top accounts for sticky nav. */
+  scroll-snap-type: y proximity;
+  scroll-padding-top: 5rem;
+}
+
+main > section {
+  scroll-snap-align: start;
+  scroll-snap-stop: normal;
 }
 
 body {
