@@ -24,29 +24,26 @@ export async function loginTeam(
   const trimCode = teamCode.trim().toUpperCase();
   const trimId = identifier.trim();
 
-  // Step 1: find the team
-  const { data: teamRows, error: teamErr } = await insforge
+  const { data: teamRows, error: teamErr } = await insforge.database
     .from("teams")
     .select("id, name, team_code")
     .ilike("team_code", trimCode)
     .limit(1);
 
-  if (teamErr) throw new Error("Database error. Please try again.");
+  if (teamErr) throw new Error(`Database error: ${teamErr.message}`);
   if (!teamRows || teamRows.length === 0)
     throw new Error("Team code not found. Check with your organiser.");
 
   const team = teamRows[0] as { id: string; name: string; team_code: string };
 
-  // Step 2: verify participant belongs to this team
-  // Match on name (case-insensitive) — once seeded, roll numbers can be a column
-  const { data: participants, error: partErr } = await insforge
+  const { data: participants, error: partErr } = await insforge.database
     .from("participants")
     .select("id, name")
     .eq("team_id", team.id)
     .ilike("name", `%${trimId}%`)
     .limit(1);
 
-  if (partErr) throw new Error("Database error. Please try again.");
+  if (partErr) throw new Error(`Database error: ${partErr.message}`);
   if (!participants || participants.length === 0)
     throw new Error("Your name was not found in that team. Check with your organiser.");
 
@@ -80,13 +77,13 @@ export async function loginSpotLeader(
 ): Promise<SpotLeaderSession> {
   const trimCode = leaderCode.trim();
 
-  const { data: spots, error } = await insforge
+  const { data: spots, error } = await insforge.database
     .from("spots")
     .select("id, name, spot_leader_code")
     .eq("spot_leader_code", trimCode)
     .limit(1);
 
-  if (error) throw new Error("Database error. Please try again.");
+  if (error) throw new Error(`Database error: ${error.message}`);
   if (!spots || spots.length === 0)
     throw new Error("Invalid leader code. Check your briefing card.");
 

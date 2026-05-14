@@ -541,7 +541,7 @@ src/
 
 # PHASE PLAN
 
-# Phase 0 — Audit Existing Codebase
+# Phase 0 — Audit Existing Codebase [x]
 
 ## Goal
 
@@ -549,7 +549,7 @@ Understand existing architecture.
 
 ---
 
-## Sub Problem 0.1
+## Sub Problem 0.1 [x]
 
 Audit reusable components.
 
@@ -575,7 +575,7 @@ docs: component reuse mapping
 
 ---
 
-## Sub Problem 0.2
+## Sub Problem 0.2 [x]
 
 Convert to route architecture.
 
@@ -605,7 +605,7 @@ feat: setup app routing
 
 ---
 
-# Phase 1 — Authentication
+# Phase 1 — Authentication [x]
 
 ## Goal
 
@@ -615,7 +615,7 @@ No dashboard yet.
 
 ---
 
-## Sub Problem 1.1
+## Sub Problem 1.1 [x]
 
 Build login UI.
 
@@ -631,7 +631,7 @@ Done when:
 
 ---
 
-## Sub Problem 1.2
+## Sub Problem 1.2 [x]
 
 InsForge auth integration.
 
@@ -667,7 +667,7 @@ feat: authentication system
 
 ---
 
-# Phase 2 — Backend Schema
+# Phase 2 — Backend Schema [ ]
 
 ## Goal
 
@@ -677,7 +677,7 @@ No UI.
 
 ---
 
-## Sub Problem 2.1
+## Sub Problem 2.1 [ ]
 
 Create collections.
 
@@ -697,7 +697,7 @@ CRUD works.
 
 ---
 
-## Sub Problem 2.2
+## Sub Problem 2.2 [ ]
 
 Seed test data.
 
