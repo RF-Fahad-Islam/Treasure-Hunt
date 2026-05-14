@@ -5,12 +5,14 @@ import { Backdrop } from "@/components/Backdrop";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Reveal } from "@/components/Reveal";
+import { useAuthStore } from "@/store/authStore";
+import { loginTeam, loginSpotLeader, loginAdmin } from "@/services/auth";
 
-/* ─── Types ───────────────────────────────────────────────── */
+/* ─── Types ───────────────────────────────────────────────────── */
 
 type Role = "team" | "spot-leader" | "admin";
 
-/* ─── Role Metadata ────────────────────────────────────────── */
+/* ─── Role Metadata ────────────────────────────────────────────── */
 
 const ROLES: {
   id: Role;
@@ -46,7 +48,7 @@ const ROLES: {
   },
 ];
 
-/* ─── Small helpers ─────────────────────────────────────────── */
+/* ─── Input field ────────────────────────────────────────────────── */
 
 function InputField({
   id,
@@ -56,6 +58,7 @@ function InputField({
   value,
   onChange,
   autoComplete,
+  disabled,
 }: {
   id: string;
   label: string;
@@ -64,6 +67,7 @@ function InputField({
   value: string;
   onChange: (v: string) => void;
   autoComplete?: string;
+  disabled?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -81,7 +85,8 @@ function InputField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         autoComplete={autoComplete}
-        className="w-full rounded-2xl border px-4 py-3.5 text-base font-semibold outline-none transition-all duration-200 placeholder:font-normal"
+        disabled={disabled}
+        className="w-full rounded-2xl border px-4 py-3.5 text-base font-semibold outline-none transition-all duration-200 placeholder:font-normal disabled:opacity-50"
         style={{
           background: "var(--surface)",
           borderColor: "var(--border-soft)",
@@ -102,16 +107,18 @@ function InputField({
   );
 }
 
-/* ─── Role Card ─────────────────────────────────────────────── */
+/* ─── Role Card ─────────────────────────────────────────────────── */
 
 function RoleCard({
   role,
   selected,
   onSelect,
+  disabled,
 }: {
   role: (typeof ROLES)[number];
   selected: boolean;
   onSelect: () => void;
+  disabled: boolean;
 }) {
   return (
     <motion.button
@@ -127,8 +134,10 @@ function RoleCard({
         boxShadow: selected
           ? `0 6px 20px -4px ${role.shadowColor}, 0 3px 0 ${role.shadowColor}`
           : "none",
-        cursor: "pointer",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled && !selected ? 0.6 : 1,
       }}
+      disabled={disabled}
       aria-pressed={selected}
       aria-label={`Select role: ${role.label}`}
     >
@@ -146,28 +155,50 @@ function RoleCard({
   );
 }
 
-/* ─── Forms per role ────────────────────────────────────────── */
+/* ─── Error banner ───────────────────────────────────────────────── */
 
-function TeamForm() {
+function ErrorBanner({ message }: { message: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -6, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      className="rounded-2xl px-4 py-3 text-center text-[13px] font-bold"
+      style={{
+        background: "rgba(255,75,75,0.08)",
+        border: "1px solid rgba(255,75,75,0.25)",
+        color: "var(--color-brand-red)",
+      }}
+      role="alert"
+    >
+      {message}
+    </motion.div>
+  );
+}
+
+/* ─── Team Form ──────────────────────────────────────────────────── */
+
+function TeamForm({ isLoading, error, onSubmit }: {
+  isLoading: boolean;
+  error: string | null;
+  onSubmit: (a: string, b: string) => Promise<void>;
+}) {
   const [roll, setRoll] = useState("");
   const [code, setCode] = useState("");
-  const navigate = useNavigate();
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Phase 1.2: wire InsForge auth here
-    navigate("/team");
-  };
+  const canSubmit = roll.trim().length > 0 && code.trim().length > 0 && !isLoading;
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form
+      onSubmit={(e) => { e.preventDefault(); void onSubmit(roll, code); }}
+      className="flex flex-col gap-4"
+    >
       <InputField
         id="team-roll"
-        label="Roll Number"
-        placeholder="e.g. CSE-2001-014"
+        label="Your Name / Roll"
+        placeholder="e.g. Fahad Islam"
         value={roll}
         onChange={setRoll}
-        autoComplete="username"
+        autoComplete="name"
+        disabled={isLoading}
       />
       <InputField
         id="team-code"
@@ -176,90 +207,110 @@ function TeamForm() {
         value={code}
         onChange={setCode}
         autoComplete="one-time-code"
+        disabled={isLoading}
       />
+      {error && <ErrorBanner message={error} />}
       <button
         type="submit"
         className="btn-press btn-primary btn-press--lg mt-2 w-full"
-        disabled={!roll.trim() || !code.trim()}
-        style={
-          !roll.trim() || !code.trim()
-            ? { opacity: 0.5, cursor: "not-allowed" }
-            : {}
-        }
+        disabled={!canSubmit}
+        style={!canSubmit ? { opacity: 0.5, cursor: "not-allowed" } : {}}
       >
-        Join the Hunt 🏆
+        {isLoading ? "Joining…" : "Join the Hunt 🏆"}
       </button>
       <p className="text-center text-[12px]" style={{ color: "var(--fg-muted)" }}>
-        Your roll &amp; team code are provided by the organiser.
+        Your name &amp; team code are provided by the organiser.
       </p>
     </form>
   );
 }
 
+/* ─── Credentials Form ───────────────────────────────────────────── */
+
 function CredentialsForm({
   role,
   accent,
   ctaLabel,
-  destination,
+  usernameLabel,
+  passwordLabel,
+  usernamePlaceholder,
+  passwordPlaceholder,
+  isLoading,
+  error,
+  onSubmit,
 }: {
   role: Role;
   accent: string;
   ctaLabel: string;
-  destination: string;
+  usernameLabel: string;
+  passwordLabel: string;
+  usernamePlaceholder: string;
+  passwordPlaceholder: string;
+  isLoading: boolean;
+  error: string | null;
+  onSubmit: (a: string, b: string) => Promise<void>;
 }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const navigate = useNavigate();
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Phase 1.2: wire InsForge auth here
-    navigate(destination);
-  };
+  const canSubmit = username.trim().length > 0 && password.trim().length > 0 && !isLoading;
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form
+      onSubmit={(e) => { e.preventDefault(); void onSubmit(username, password); }}
+      className="flex flex-col gap-4"
+    >
       <InputField
         id={`${role}-username`}
-        label="Username"
-        placeholder="Enter username"
+        label={usernameLabel}
+        placeholder={usernamePlaceholder}
         value={username}
         onChange={setUsername}
         autoComplete="username"
+        disabled={isLoading}
       />
       <InputField
         id={`${role}-password`}
-        label="Password"
+        label={passwordLabel}
         type="password"
-        placeholder="Enter password"
+        placeholder={passwordPlaceholder}
         value={password}
         onChange={setPassword}
         autoComplete="current-password"
+        disabled={isLoading}
       />
+      {error && <ErrorBanner message={error} />}
       <button
         type="submit"
         className="btn-press btn-press--lg mt-2 w-full text-white"
-        disabled={!username.trim() || !password.trim()}
+        disabled={!canSubmit}
         style={{
           background: accent,
-          boxShadow:
-            !username.trim() || !password.trim()
-              ? "none"
-              : `0 4px 0 0 color-mix(in srgb, ${accent} 60%, black)`,
-          opacity: !username.trim() || !password.trim() ? 0.5 : 1,
-          cursor:
-            !username.trim() || !password.trim() ? "not-allowed" : "pointer",
+          boxShadow: !canSubmit
+            ? "none"
+            : `0 4px 0 0 color-mix(in srgb, ${accent} 60%, black)`,
+          opacity: !canSubmit ? 0.5 : 1,
+          cursor: !canSubmit ? "not-allowed" : "pointer",
         }}
       >
-        {ctaLabel}
+        {isLoading ? "Verifying…" : ctaLabel}
       </button>
     </form>
   );
 }
 
-/* ─── Form switcher with animation ─────────────────────────── */
+/* ─── Role form switcher ─────────────────────────────────────────── */
 
-function RoleForm({ role }: { role: Role }) {
+function RoleForm({
+  role,
+  isLoading,
+  error,
+  onSubmit,
+}: {
+  role: Role;
+  isLoading: boolean;
+  error: string | null;
+  onSubmit: (a: string, b: string) => Promise<void>;
+}) {
   const meta = ROLES.find((r) => r.id === role)!;
 
   return (
@@ -288,13 +339,21 @@ function RoleForm({ role }: { role: Role }) {
           </p>
         </div>
 
-        {role === "team" && <TeamForm />}
+        {role === "team" && (
+          <TeamForm isLoading={isLoading} error={error} onSubmit={onSubmit} />
+        )}
         {role === "spot-leader" && (
           <CredentialsForm
             role="spot-leader"
             accent={meta.accentVar}
             ctaLabel="Enter Dashboard →"
-            destination="/spot-leader"
+            usernameLabel="Spot Name (optional)"
+            passwordLabel="Leader Code"
+            usernamePlaceholder="Your name (optional)"
+            passwordPlaceholder="Enter your spot leader code"
+            isLoading={isLoading}
+            error={error}
+            onSubmit={onSubmit}
           />
         )}
         {role === "admin" && (
@@ -302,7 +361,13 @@ function RoleForm({ role }: { role: Role }) {
             role="admin"
             accent={meta.accentVar}
             ctaLabel="Access Admin Panel →"
-            destination="/admin"
+            usernameLabel="Username"
+            passwordLabel="Password"
+            usernamePlaceholder="admin"
+            passwordPlaceholder="Enter admin password"
+            isLoading={isLoading}
+            error={error}
+            onSubmit={onSubmit}
           />
         )}
       </motion.div>
@@ -310,28 +375,55 @@ function RoleForm({ role }: { role: Role }) {
   );
 }
 
-/* ─── Page ──────────────────────────────────────────────────── */
+/* ─── Page ───────────────────────────────────────────────────────── */
 
 /**
- * Login page — role selector + role-specific form.
+ * Login page — role selector + InsForge-wired auth.
  * Route: /login
- *
- * Auth wiring (InsForge) happens in Phase 1.2.
- * This sub-problem (1.1) covers UI only.
  */
 export default function LoginPage() {
   const [role, setRole] = useState<Role>("team");
+  const navigate = useNavigate();
+  const { setSession, setLoading, setError, isLoading, error } = useAuthStore();
+
+  const handleRoleChange = (r: Role) => {
+    setRole(r);
+    setError(null);
+  };
+
+  const handleSubmit = async (a: string, b: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      let session;
+      if (role === "team") {
+        session = await loginTeam(a, b);
+        setSession(session);
+        navigate("/team", { replace: true });
+      } else if (role === "spot-leader") {
+        session = await loginSpotLeader(a, b);
+        setSession(session);
+        navigate("/spot-leader", { replace: true });
+      } else {
+        session = await loginAdmin(a, b);
+        setSession(session);
+        navigate("/admin", { replace: true });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Something went wrong.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="relative min-h-screen overflow-hidden">
       <Backdrop />
 
-      {/* Theme toggle — top right */}
       <div className="absolute right-4 top-4 z-20">
         <ThemeToggle />
       </div>
-
-      {/* Back to landing — top left */}
       <a
         href="/"
         className="absolute left-4 top-4 z-20 flex items-center gap-1.5 rounded-full px-3 py-2 text-[12px] font-bold uppercase tracking-wide transition-opacity hover:opacity-70"
@@ -340,15 +432,16 @@ export default function LoginPage() {
         ← Back
       </a>
 
-      {/* Center content */}
       <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4 py-16">
 
-        {/* Branding */}
         <Reveal duration={0.5}>
           <a href="/" className="flex flex-col items-center gap-3 no-underline">
             <Logo className="h-14 w-14 drop-shadow-lg" />
             <div className="text-center">
-              <p className="font-display text-[22px] font-extrabold leading-none" style={{ color: "var(--fg)" }}>
+              <p
+                className="font-display text-[22px] font-extrabold leading-none"
+                style={{ color: "var(--fg)" }}
+              >
                 Treasure Hunt
               </p>
               <p
@@ -361,14 +454,8 @@ export default function LoginPage() {
           </a>
         </Reveal>
 
-        {/* Card */}
         <Reveal delay={0.08} duration={0.55}>
-          <div
-            className="card mt-8 w-full max-w-sm p-6"
-            style={{ background: "var(--surface)" }}
-          >
-
-            {/* Step label */}
+          <div className="card mt-8 w-full max-w-sm p-6" style={{ background: "var(--surface)" }}>
             <p
               className="mb-3 text-center text-[11px] font-extrabold uppercase tracking-[0.2em]"
               style={{ color: "var(--fg-muted)" }}
@@ -376,31 +463,32 @@ export default function LoginPage() {
               Step 1 · Who are you?
             </p>
 
-            {/* Role selector */}
             <div className="mb-6 flex gap-2">
               {ROLES.map((r) => (
                 <RoleCard
                   key={r.id}
                   role={r}
                   selected={role === r.id}
-                  onSelect={() => setRole(r.id)}
+                  onSelect={() => handleRoleChange(r.id)}
+                  disabled={isLoading}
                 />
               ))}
             </div>
 
-            {/* Divider */}
             <div
               className="mb-5 h-px w-full"
               style={{ background: "var(--border-soft)" }}
             />
 
-            {/* Role-specific form */}
-            <RoleForm role={role} />
-
+            <RoleForm
+              role={role}
+              isLoading={isLoading}
+              error={error}
+              onSubmit={handleSubmit}
+            />
           </div>
         </Reveal>
 
-        {/* Footer note */}
         <Reveal delay={0.18} duration={0.5}>
           <p
             className="mt-6 text-center text-[12px] font-semibold"
@@ -409,7 +497,6 @@ export default function LoginPage() {
             Treasure Hunt · University of Dhaka &mdash; CSE
           </p>
         </Reveal>
-
       </div>
     </div>
   );

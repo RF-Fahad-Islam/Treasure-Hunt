@@ -10,10 +10,12 @@
     "lint": "tsc -b"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.105.4",
     "motion": "^11.15.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^7.15.1"
+    "react-router-dom": "^7.15.1",
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

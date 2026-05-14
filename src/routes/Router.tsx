@@ -1,4 +1,6 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Navigate, Routes, Route } from "react-router-dom";
+import { useSession } from "@/store/authStore";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import LandingPage from "@/pages/Landing";
 import LoginPage from "@/pages/Login";
 import TeamDashboardPage from "@/pages/TeamDashboard";
@@ -7,30 +9,62 @@ import AdminPage from "@/pages/Admin";
 import ResultsPage from "@/pages/Results";
 
 /**
+ * If already logged in and tries to visit /login,
+ * redirect them to their role's dashboard.
+ */
+function LoginGate() {
+  const session = useSession();
+  if (!session) return <LoginPage />;
+  const map = { team: "/team", "spot-leader": "/spot-leader", admin: "/admin" } as const;
+  return <Navigate to={map[session.role]} replace />;
+}
+
+/**
  * Application router — all routes defined here.
  *
- * Protected routes (Phase 1+) will be wrapped in a <ProtectedRoute>
- * component once auth is wired. For now all routes are open.
- *
  * Route map:
- *   /              → Landing page
- *   /login         → Login / role selector
- *   /team          → Team dashboard (auth-protected, Phase 4)
- *   /spot-leader   → Spot leader panel (auth-protected, Phase 5)
- *   /admin         → Admin dashboard (auth-protected, Phase 3)
- *   /results       → Final results / podium (Phase 9)
+ *   /              → Landing page (public)
+ *   /login         → Login / role selector (redirects if already authed)
+ *   /team          → Team dashboard (team role only)
+ *   /spot-leader   → Spot leader panel (spot-leader role only)
+ *   /admin         → Admin dashboard (admin role only)
+ *   /results       → Final results / podium (public)
  *   *              → Redirect to /
  */
 export function Router() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/team" element={<TeamDashboardPage />} />
-      <Route path="/spot-leader" element={<SpotLeaderPage />} />
-      <Route path="/admin" element={<AdminPage />} />
+      <Route path="/login" element={<LoginGate />} />
+
+      <Route
+        path="/team"
+        element={
+          <ProtectedRoute role="team">
+            <TeamDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/spot-leader"
+        element={
+          <ProtectedRoute role="spot-leader">
+            <SpotLeaderPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute role="admin">
+            <AdminPage />
+          </ProtectedRoute>
+        }
+      />
+
       <Route path="/results" element={<ResultsPage />} />
-      {/* Catch-all — redirect unknown routes to landing */}
+
+      {/* Catch-all → landing */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
