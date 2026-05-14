@@ -1,5 +1,6 @@
-import { Navigate, Routes, Route } from "react-router-dom";
-import { useSession } from "@/store/authStore";
+import { useEffect } from "react";
+import { Navigate, Routes, Route, useNavigate } from "react-router-dom";
+import { useSession, useAuthStore } from "@/store/authStore";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import LandingPage from "@/pages/Landing";
 import LoginPage from "@/pages/Login";
@@ -20,16 +21,31 @@ function LoginGate() {
 }
 
 /**
+ * Validates the persisted session against the DB on mount.
+ * If the session was deactivated elsewhere (another device, admin),
+ * the user is redirected to login.
+ */
+function SessionGuard({ children }: { children: React.ReactNode }) {
+  const session = useSession();
+  const checkSession = useAuthStore((s) => s.checkSession);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!session) return;
+    checkSession().then(() => {
+      // If session was cleared by checkSession, redirect
+      const currentSession = useAuthStore.getState().session;
+      if (!currentSession) {
+        navigate("/login", { replace: true });
+      }
+    });
+  }, []);
+
+  return <>{children}</>;
+}
+
+/**
  * Application router — all routes defined here.
- *
- * Route map:
- *   /              → Landing page (public)
- *   /login         → Login / role selector (redirects if already authed)
- *   /team          → Team dashboard (team role only)
- *   /spot-leader   → Spot leader panel (spot-leader role only)
- *   /admin         → Admin dashboard (admin role only)
- *   /results       → Final results / podium (public)
- *   *              → Redirect to /
  */
 export function Router() {
   return (
@@ -41,7 +57,9 @@ export function Router() {
         path="/team"
         element={
           <ProtectedRoute role="team">
-            <TeamDashboardPage />
+            <SessionGuard>
+              <TeamDashboardPage />
+            </SessionGuard>
           </ProtectedRoute>
         }
       />
@@ -49,7 +67,9 @@ export function Router() {
         path="/spot-leader"
         element={
           <ProtectedRoute role="spot-leader">
-            <SpotLeaderPage />
+            <SessionGuard>
+              <SpotLeaderPage />
+            </SessionGuard>
           </ProtectedRoute>
         }
       />
@@ -57,7 +77,9 @@ export function Router() {
         path="/admin"
         element={
           <ProtectedRoute role="admin">
-            <AdminPage />
+            <SessionGuard>
+              <AdminPage />
+            </SessionGuard>
           </ProtectedRoute>
         }
       />

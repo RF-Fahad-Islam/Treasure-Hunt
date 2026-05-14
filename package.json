@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@insforge/sdk": "^1.2.9",
+    "canvas-confetti": "^1.9.4",
     "motion": "^11.15.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^25.7.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

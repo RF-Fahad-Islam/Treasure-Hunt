@@ -1,144 +1,259 @@
 # Treasure Hunt — DU CSE
 
-Companion app for the Treasure Hunt event, University of Dhaka, Department of Computer Science & Engineering.
+Real-time treasure hunt platform for the University of Dhaka, Department of Computer Science & Engineering. Built with **Vite 6 + React 19 + TypeScript** frontend and **InsForge** backend.
 
-This repo currently contains the **frontend landing page**. Backend lives separately.
+---
 
 ## Stack
 
-- **Vite 6** + **React 19** + **TypeScript**
-- **Tailwind CSS v4** (via `@tailwindcss/vite`)
-- **Motion** (the new Framer Motion) for animations
-- **Nunito** font (Google Fonts)
+| Layer          | Technology                              |
+| -------------- | --------------------------------------- |
+| Frontend       | Vite 6, React 19, TypeScript, Tailwind v4, Motion |
+| Backend        | InsForge (PostgreSQL + REST API)        |
+| SDK            | `@insforge/sdk`                         |
+| Auth           | Custom sessions via Zustand + localStorage |
+| State          | Zustand with persist middleware         |
 
-## Prerequisites
+---
 
-- **Node.js 20 or newer.** (Tested on 24.) Check with `node -v`. If you don't have it: https://nodejs.org/
-- **Git.** Check with `git -v`.
+## Full Flow
 
-## Get the code
+### 1. Admin Setup
 
-```bash
-git clone https://github.com/RF-Fahad-Islam/Treasure-Hunt.git
-cd Treasure-Hunt
-```
+1. **Add participants** via Admin Panel → enter name (required), roll, email, phone (optional).
+2. **Generate teams** — system randomly divides participants into teams of 5. The **first member of each team is marked as Team Leader** (👑).
+3. **Preview & Save** — teams are written to DB, each gets a unique 6‑char team code. Clue routes are also generated (randomized order, all spots used).
+4. Participants are now assigned to teams; only the **Team Leader** can log in.
 
-## Install dependencies
+### 2. Login
 
-```bash
-npm install
-```
+| Role         | Credentials                                          |
+| ------------ | ---------------------------------------------------- |
+| Team Leader  | Leader's name (or roll) + 6‑char team code           |
+| Spot Leader  | Leader code (printed on briefing card)               |
+| Admin        | Admin password (set in `.env.local`)                 |
 
-This pulls down everything in `package.json` into a local `node_modules/` folder (~150 packages, takes about 15 seconds on a decent connection). You only need to run this once after cloning, and again whenever someone adds a new dependency.
+Team login filters by `is_leader = true` — non‑leaders cannot log in.
 
-## Run the dev server
+### 3. Team Dashboard (`/team`)
 
-```bash
-npm run dev
-```
+- **Clue card** — shows clue text + optional `image_url` + spot location hint
+- **Timer** — backend-driven countdown (default 40 min). On timeout: popup with **Reveal Answer** (0 pts, move on) or **Keep Searching** (still eligible for +100)
+- **Leaderboard** — sorted by `total_points DESC` → `total_penalty_seconds ASC` (auto‑refreshes every 15s)
+- **Progress bar** — visual clue completion tracker
+- **Confetti** 🎉 on completing a clue
 
-Vite prints something like:
+### 4. Spot Leader (`/spot-leader`)
 
-```
-  ➜  Local:   http://localhost:5173/
-  ➜  Network: http://192.168.0.x:5173/
-```
+- Sees arriving teams (filtered by their assigned spot via `spot_leader_code`)
+- **Approve** button opens a dialog with:
 
-Open the **Local** URL in your browser to see the site. The dev server auto-reloads on file changes.
+  | Option | Effect |
+  | ------ | ------ |
+  | **Play Mini‑Game** | Select bonus points (10–60) + penalty (optional) → approve |
+  | **Skip Mini‑Game** | Approve with standard +100 pts + penalty (optional) |
+  | **Cancel** | Close dialog |
 
-## Test on your phone
+- Approval: marks clue completed, awards points, updates penalty seconds, moves team to next clue, starts next timer
 
-The site is mobile-first, so testing on a real phone matters. Vite is configured (`server.host: true` in `vite.config.ts`) to expose the dev server on your local network.
+### 5. Results (`/results`)
 
-1. Make sure your phone is on the **same Wi-Fi** as your computer.
-2. Look at the `Network:` URL Vite prints when you run `npm run dev` — e.g. `http://192.168.0.x:5173/`.
-3. Type that URL into your phone's browser. The site will load, and hot-reload still works.
+- Public page showing final standings
+- **Podium** for top 3 (🥇🥈🥉)
+- Full ranked list with scores and penalties
 
-If the phone can't reach the URL:
+---
 
-- **Firewall.** Windows Defender often blocks incoming connections on first run. When you start `npm run dev` and a permission popup appears, allow access on **Private networks**.
-- **Different network.** Phones on mobile data, or computer on a different VLAN/SSID, won't see each other. Phone must be on the same Wi-Fi.
-- **VPN.** If your computer is on a VPN, turn it off (or the network IP will be from the VPN's subnet, unreachable from your phone).
+## Database Schema
 
-## Build for production
+### `teams`
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| `id` | UUID | PK |
+| `name` | text | Team display name |
+| `team_code` | text | 6‑char login code |
+| `total_points` | numeric | Cumulative score |
+| `total_penalty_seconds` | integer | Sum of all penalties |
+| `total_solve_time_seconds` | integer | (future) |
+| `current_clue_index` | integer | Which clue they're on |
+| `hunt_completed` | boolean | All clues done |
 
-```bash
-npm run build
-```
+### `participants`
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| `id` | UUID | PK |
+| `name` | text | Required |
+| `roll` | text | Student roll number (optional) |
+| `email` | text | Optional |
+| `phone` | text | Optional |
+| `team_id` | UUID | FK → teams |
+| `is_leader` | boolean | Only leader can log in |
 
-Outputs a static bundle to `dist/`. Preview it locally with:
+### `spots`
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| `id` | UUID | PK |
+| `name` | text | e.g. "Library" |
+| `description` | text | Spot details |
+| `location_hint` | text | Hint for teams |
+| `spot_leader_code` | text | Login code for spot leader |
+| `has_mini_game` | boolean | Whether mini‑game is available |
+| `mini_game_description` | text | Mini‑game instructions |
 
-```bash
-npm run preview
-```
+### `clues`
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| `id` | UUID | PK |
+| `spot_id` | UUID | FK → spots |
+| `clue_text` | text | The puzzle/challenge |
+| `image_url` | text | Optional image for the clue |
+| `difficulty` | text | easy / medium / hard |
 
-## Project structure
+### `team_routes`
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| `id` | UUID | PK |
+| `team_id` | UUID | FK → teams |
+| `clue_id` | UUID | FK → clues |
+| `route_order` | integer | Position in route |
+| `status` | text | pending / active / completed / revealed |
+| `clue_started_at` | timestamptz | When timer started |
+| `clue_solved_at` | timestamptz | When approved/revealed |
+| `points_awarded` | numeric | Points for this clue |
+| `mini_game_played` | boolean | |
+| `mini_game_points` | numeric | Bonus points |
+| `penalty_seconds` | integer | Penalty for this clue |
+| `approved_by_spot_leader` | boolean | |
+| `answer_revealed` | boolean | Skipped via timeout |
+
+### `event_config`
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| `id` | UUID | PK |
+| `event_name` | text | |
+| `clue_time_limit_minutes` | integer | Default 40 |
+| `points_per_clue` | integer | Default 100 |
+| `max_mini_game_points` | numeric | |
+| `hunt_started` | boolean | Toggle to start event |
+| `hunt_started_at` | timestamptz | |
+
+### `sessions`
+| Column | Type | Notes |
+| ------ | ---- | ----- |
+| `id` | UUID | PK |
+| `user_id` | text | Participant / Spot / "admin" ID |
+| `user_role` | text | team / spot-leader / admin |
+| `session_token` | text | Unique random token |
+| `device_info` | text | Browser + OS info |
+| `ip_address` | text | (future) |
+| `created_at` | timestamptz | When session started |
+| `last_active_at` | timestamptz | Last activity |
+| `is_active` | boolean | Whether session is valid |
+
+---
+
+## Session Management (One Device Per Login)
+
+- Each login creates a new row in the `sessions` table with a random token + device info
+- Old sessions for the same user are **automatically deactivated** — the previous device is logged out
+- On every protected page mount, `SessionGuard` validates the stored session token against the DB
+- If an admin deactivates a session, or the user logs in from another device, the old session becomes invalid and the user is redirected to `/login`
+- Admin Panel has an **Active Sessions** section to view all current sessions with device info and kick users
+
+---
+
+## Key Decisions
+
+---
+
+## Project Structure
 
 ```
 src/
-  App.tsx                  Page composition (sections in order)
-  main.tsx                 React entry
-  index.css                Tailwind + theme tokens + animations
-  hooks/
-    useTheme.ts            Light/dark mode state + localStorage
-  components/
-    Backdrop.tsx           Drifting gradient background (different per theme)
-    Nav.tsx                Sticky top bar with theme toggle + "Find team" CTA
-    Hero.tsx               Hero section
-    HeroBadge.tsx          Light-mode hero illustration (badge + decorations)
-    Gyro3D.tsx             Dark-mode 3D rotating compass element
-    About.tsx              Feature cards (Live clue feed / Team intel / Leaderboard)
-    HowItWorks.tsx         5-step rules section
-    SpotsMarquee.tsx       Horizontal marquee of campus spots
-    RollLookup.tsx         Roll-number input + (mocked) team lookup
-    Footer.tsx             Footer
-    ThemeToggle.tsx        Sun/moon switch
-    Reveal.tsx             Scroll-triggered reveal helpers
-    CountUp.tsx            Animated number counter
-    Logo.tsx               SVG logo mark
-public/
-  favicon.svg
-index.html                 Includes Nunito font + pre-paint theme detection
+├── pages/
+│   ├── Landing/          Public landing page
+│   ├── Login/            Role selector + auth forms
+│   ├── TeamDashboard/    Clue, timer, leaderboard
+│   ├── SpotLeader/       Approve teams, mini‑game, penalties
+│   ├── Admin/            Team generator, participant management
+│   └── Results/          Podium + final standings
+├── components/
+│   ├── auth/             ProtectedRoute
+│   ├── timer/            CountdownTimer
+│   ├── leaderboard/      Leaderboard list
+│   ├── Confetti.tsx      Celebration effect
+│   └── ...shared         Backdrop, Logo, ThemeToggle, Reveal, CountUp etc.
+├── services/
+│   ├── auth.ts           Login functions for all roles
+│   ├── admin.ts          Team generation, participant CRUD
+│   ├── team.ts           Dashboard data, leaderboard, reveal/keep-searching
+│   └── spotLeader.ts     Fetch arriving teams, approve with minigame/penalty
+├── store/
+│   └── authStore.ts      Zustand session + localStorage persistence
+├── types/
+│   └── index.ts          Shared TypeScript interfaces
+├── lib/
+│   └── insforge.ts       InsForge SDK client
+└── routes/
+    └── Router.tsx         All routes with LoginGate + ProtectedRoute
 ```
 
-## Themes
+---
 
-Two designs ship together:
+## Key Decisions
 
-- **Light mode (default)** — Duolingo-inspired: soft `#F7F7F7` background, white rounded cards, big green CTAs, Nunito font, playful colored accents.
-- **Dark mode** — neon: deep `#05030a` background, gradient text, drifting violet/magenta/cyan orbs, 3D rotating compass behind the hero.
+| Decision | Rationale |
+| -------- | --------- |
+| `@insforge/sdk` over `@supabase/supabase-js` | InsForge backend does not expose `/rest/v1/` endpoints |
+| Custom sessions (Zustand + localStorage) | Teams auth via roll/code, not email/password |
+| Spot leader auth via `spot_leader_code` | No separate `spot_leaders` table needed |
+| Admin auth via `VITE_ADMIN_PASSWORD` | Simple env-var guard, no DB table |
+| `team_routes` as dual-purpose | Route ordering + per-clue progress (replaces separate `spot_logs`) |
+| First team member = leader | Auto‑assigned during generation, only leader can login |
+| Polling (15s) for realtime | InsForge realtime subscriptions available as future upgrade |
 
-Toggle via the sun/moon button in the nav (top right). Choice is saved to `localStorage`. First visit respects your OS preference.
+---
 
-## Backend wiring
+## Environment Variables (`.env.local`)
 
-The Roll Lookup form currently hits a local `mockLookup` function. To connect to the real backend, replace this in `src/components/RollLookup.tsx`:
-
-```ts
-const data = await mockLookup(trimmed);
+```
+VITE_INSFORGE_URL=https://6ing66q5.us-east.insforge.app
+VITE_INSFORGE_ANON_KEY=<your-anon-key>
+VITE_ADMIN_PASSWORD=<admin-password>
 ```
 
-with:
+---
 
-```ts
-const res = await fetch(`/api/roll/${encodeURIComponent(trimmed)}`);
-const data = res.ok ? await res.json() : null;
+## Prerequisites
+
+- **Node.js 20+**
+- **Git**
+
+## Quick Start
+
+```bash
+git clone <repo-url>
+cd Treasure-Hunt
+npm install
+npm run dev          # → http://localhost:5173
 ```
 
-The `LookupResult` type defined at the top of that file is the contract — backend should return `{ roll, team, captain, members, station }`.
+## Scripts
 
-## Common scripts
+| Command | What it does |
+| ------- | ------------ |
+| `npm run dev` | Start dev server with hot reload |
+| `npm run build` | Type-check + build production bundle |
+| `npm run preview` | Serve built bundle locally |
+| `npm run lint` | TypeScript type-check only |
 
-| Command           | What it does                                 |
-| ----------------- | -------------------------------------------- |
-| `npm run dev`     | Start dev server with hot reload             |
-| `npm run build`   | Type-check + build production bundle to dist |
-| `npm run preview` | Serve the built bundle locally to verify     |
-| `npm run lint`    | TypeScript type-check only                   |
+## Login Credentials (Test Data)
 
-## Troubleshooting
-
-- **`npm install` fails on Windows with `EPERM`** — close VS Code or any editor that might be locking files in `node_modules`, then retry.
-- **`port 5173 is in use`** — another Vite instance is already running. Stop it, or run `npm run dev -- --port 5174`.
-- **Fonts don't load** — make sure you have internet (Nunito is pulled from Google Fonts at runtime; no offline build).
-- **Tailwind classes not applying** — restart the dev server. Tailwind v4's JIT scans source files at startup; freshly added arbitrary-value classes sometimes need a restart.
+| Role | Identifier | Code |
+| ---- | ---------- | ---- |
+| Team Leader (Phoenix) | Fahad Islam | PHX2026 |
+| Team Leader (Vanguard) | Rajib Hossain | VNG2026 |
+| Spot Leader (Library) | — | LIB-2026 |
+| Spot Leader (Cafeteria) | — | CAF-2026 |
+| Spot Leader (Lab) | — | LAB-2026 |
+| Admin | — | `admin2026` |

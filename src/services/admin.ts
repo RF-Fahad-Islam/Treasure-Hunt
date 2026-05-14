@@ -85,6 +85,8 @@ export function generateTeams(participants: Participant[]): GeneratedTeam[] {
       }
       break;
     }
+    // First member is team leader
+    members[0] = { ...members[0], is_leader: true };
     teams.push({
       name: names[i / teamSize] ?? `Team-${teams.length + 1}`,
       teamCode: randomCode(),
@@ -115,7 +117,7 @@ export function generateRoutes(
 
 export async function clearAllTeamsAndRoutes(): Promise<void> {
   await insforge.database.from("team_routes").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-  await insforge.database.from("participants").update({ team_id: null }).neq("id", "00000000-0000-0000-0000-000000000000");
+  await insforge.database.from("participants").update({ team_id: null, is_leader: false }).neq("id", "00000000-0000-0000-0000-000000000000");
   await insforge.database.from("teams").delete().neq("id", "00000000-0000-0000-0000-000000000000");
 }
 
@@ -141,13 +143,13 @@ export async function saveTeams(
     if (error) throw new Error(`Failed to create team ${gt.name}: ${error.message}`);
     teamIdMap.set(gt.name, data.id);
 
-    const memberIds = gt.members.map((m) => m.id);
-    const { error: updateErr } = await insforge.database
-      .from("participants")
-      .update({ team_id: data.id })
-      .in("id", memberIds);
-
-    if (updateErr) throw new Error(`Failed to assign members to ${gt.name}: ${updateErr.message}`);
+    for (const m of gt.members) {
+      const { error: updateErr } = await insforge.database
+        .from("participants")
+        .update({ team_id: data.id, is_leader: m.is_leader ?? false })
+        .eq("id", m.id);
+      if (updateErr) throw new Error(`Failed to assign ${m.name} to ${gt.name}: ${updateErr.message}`);
+    }
   }
 
   return teamIdMap;
@@ -171,4 +173,27 @@ export async function saveRoutes(
     const { error } = await insforge.database.from("team_routes").insert(rows);
     if (error) throw new Error(`Failed to save routes for ${tr.team.name}: ${error.message}`);
   }
+}
+
+/* ─── Participant management ────────────────────────────────── */
+
+export async function addParticipant(data: {
+  name: string;
+  roll?: string;
+  email?: string;
+  phone?: string;
+}): Promise<void> {
+  const { error } = await insforge.database.from("participants").insert([{
+    name: data.name,
+    roll: data.roll ?? null,
+    email: data.email ?? null,
+    phone: data.phone ?? null,
+    is_leader: false,
+  }]);
+  if (error) throw new Error(`Failed to add participant: ${error.message}`);
+}
+
+export async function deleteParticipant(id: string): Promise<void> {
+  const { error } = await insforge.database.from("participants").delete().eq("id", id);
+  if (error) throw new Error(`Failed to delete participant: ${error.message}`);
 }

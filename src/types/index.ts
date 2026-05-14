@@ -24,9 +24,11 @@ export interface Team {
 export interface Participant {
   id: string;
   name: string;
+  roll: string | null;
   email: string | null;
   phone: string | null;
   team_id: string | null;
+  is_leader: boolean | null;
   created_at: string | null;
 }
 
@@ -45,6 +47,7 @@ export interface ClueDefinition {
   id: string;
   spot_id: string;
   clue_text: string;
+  image_url: string | null;
   difficulty: string | null;
   created_at: string | null;
 }
@@ -95,6 +98,8 @@ export interface TeamSession {
   teamName: string;
   teamCode: string;
   participantName: string;
+  participantId: string;
+  sessionToken: string;
 }
 
 export interface SpotLeaderSession {
@@ -102,8 +107,24 @@ export interface SpotLeaderSession {
   spotId: string;
   spotName: string;
   leaderCode: string;
+  sessionToken: string;
 }
 
 export interface AdminSession {
   role: "admin";
+  sessionToken: string;
+}
+
+/* ─── Session (DB row) ─────────────────────────────────────── */
+
+export interface Session {
+  id: string;
+  user_id: string;
+  user_role: string;
+  session_token: string;
+  device_info: string | null;
+  ip_address: string | null;
+  created_at: string;
+  last_active_at: string;
+  is_active: boolean;
 }
