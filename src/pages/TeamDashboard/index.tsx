@@ -8,20 +8,22 @@ import { SuccessOverlay } from "@/components/SuccessOverlay";
 import { ExpiredOverlay } from "@/components/ExpiredOverlay";
 import { CountdownTimer } from "@/components/timer/CountdownTimer";
 import { Leaderboard } from "@/components/leaderboard/Leaderboard";
+import { BroadcastBanner } from "@/components/BroadcastBanner";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import { useSession } from "@/store/authStore";
+import { useLeaderboardRealtime } from "@/hooks/useLeaderboardRealtime";
+import { useBroadcastListener } from "@/hooks/useBroadcastListener";
 import {
   fetchDashboardData,
-  fetchLeaderboard,
   revealAnswer,
 } from "@/services/team";
-import type { DashboardData, LeaderboardEntry } from "@/services/team";
+import type { DashboardData } from "@/services/team";
 
 export default function TeamDashboardPage() {
   const session = useSession();
   const teamId = session?.role === "team" ? session.teamId : null;
 
   const [data, setData] = useState<DashboardData | null>(null);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showTimeout, setShowTimeout] = useState(false);
@@ -31,17 +33,17 @@ export default function TeamDashboardPage() {
   const prevCompletedRef = useRef(0);
   const prevPointsRef = useRef(0);
 
+  const leaderboard = useLeaderboardRealtime();
+  const sessionRole = session?.role === "team" ? "team" : null;
+  const broadcast = useBroadcastListener(sessionRole);
+
   const load = useCallback(async () => {
     if (!teamId) return;
     setLoading(true);
     setError(null);
     try {
-      const [d, lb] = await Promise.all([
-        fetchDashboardData(teamId),
-        fetchLeaderboard(),
-      ]);
+      const d = await fetchDashboardData(teamId);
       setData(d);
-      setLeaderboard(lb);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load dashboard");
     } finally {
@@ -50,17 +52,6 @@ export default function TeamDashboardPage() {
   }, [teamId]);
 
   useEffect(() => { void load(); }, [load]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (teamId) {
-        fetchLeaderboard()
-          .then(setLeaderboard)
-          .catch(() => {});
-      }
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [teamId]);
 
   useEffect(() => {
     if (!data) return;
@@ -145,6 +136,8 @@ export default function TeamDashboardPage() {
         autoContinueSec={5}
       />
 
+      <BroadcastBanner broadcast={broadcast} />
+
       {session?.role === "team" && (
         <div className="absolute right-4 top-4 z-20 flex items-center gap-3">
           <span className="rounded-full bg-[var(--surface)] px-4 py-2 text-[13px] font-bold shadow-lg" style={{ color: "var(--fg-muted)" }}>
@@ -154,6 +147,7 @@ export default function TeamDashboardPage() {
         </div>
       )}
 
+      <PullToRefresh onRefresh={load}>
       <div className="relative z-10 mx-auto max-w-6xl px-4 py-20">
         {error && (
           <motion.div
@@ -168,7 +162,7 @@ export default function TeamDashboardPage() {
             role="alert"
           >
             ⚠️ {error}
-            <button onClick={load} className="ml-3 underline font-extrabold">
+            <button data-sound="heavy" onClick={load} className="ml-3 underline font-extrabold">
               Retry
             </button>
           </motion.div>
@@ -343,6 +337,7 @@ export default function TeamDashboardPage() {
           </p>
         </Reveal>
       </div>
+      </PullToRefresh>
     </div>
   );
 }

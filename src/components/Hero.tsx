@@ -125,11 +125,11 @@ export function Hero() {
             transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
             className="mt-1 flex w-full max-w-sm flex-col gap-3 sm:max-w-none sm:flex-row sm:justify-center"
           >
-            <a href="#roll" className="btn-press btn-press--lg btn-primary">
+            <a data-sound="heavy" href="#roll" className="btn-press ripple btn-press--lg btn-primary">
               <span>Enter your roll</span>
               <Arrow />
             </a>
-            <a href="#how" className="btn-press btn-press--lg btn-secondary">
+            <a href="#how" className="btn-press ripple btn-press--lg btn-secondary">
               How it works
             </a>
           </motion.div>

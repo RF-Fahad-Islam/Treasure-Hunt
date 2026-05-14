@@ -14,6 +14,7 @@ export interface DashboardData {
 }
 
 export interface LeaderboardEntry {
+  id: string;
   rank: number;
   name: string;
   score: number;
@@ -90,6 +91,7 @@ export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
   const teams = (data ?? []) as Team[];
 
   return teams.map((t, i) => ({
+    id: t.id,
     rank: i + 1,
     name: t.name,
     score: t.total_points ?? 0,

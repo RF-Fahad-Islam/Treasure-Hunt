@@ -139,8 +139,9 @@ function TeamForm({ isLoading, error, onSubmit }: {
       <InputField id="team-code" label="🏷 Team Code" placeholder="Enter your team code" value={code} onChange={setCode} autoComplete="one-time-code" disabled={isLoading} />
       {error && <ErrorBanner message={error} />}
       <motion.button
+        data-sound="success"
         whileTap={canSubmit ? { scale: 0.96 } : {}}
-        type="submit" className="btn-press btn-primary btn-press--lg mt-2 w-full rounded-2xl py-4 text-[16px]"
+        type="submit" className="btn-press ripple btn-primary btn-press--lg mt-2 w-full rounded-2xl py-4 text-[16px]"
         disabled={!canSubmit}
         style={!canSubmit ? { opacity: 0.5, cursor: "not-allowed" } : {}}
       >
@@ -171,8 +172,9 @@ function CredentialsForm({
       <InputField id={`${role}-password`} label={passwordLabel} type="password" placeholder={passwordPlaceholder} value={password} onChange={setPassword} autoComplete="current-password" disabled={isLoading} />
       {error && <ErrorBanner message={error} />}
       <motion.button
+        data-sound="success"
         whileTap={canSubmit ? { scale: 0.96 } : {}}
-        type="submit" className="btn-press btn-press--lg mt-2 w-full rounded-2xl py-4 text-[16px] text-white"
+        type="submit" className="btn-press ripple btn-press--lg mt-2 w-full rounded-2xl py-4 text-[16px] text-white"
         disabled={!canSubmit}
         style={{
           background: accent,

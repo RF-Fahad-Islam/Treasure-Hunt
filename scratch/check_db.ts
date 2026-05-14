@@ -8,7 +8,12 @@ const insforge = createClient({ baseUrl, anonKey });
 async function checkData() {
   console.log('--- Checking Teams ---');
   const { data: teams, error: tErr } = await insforge.database.from('teams').select('*');
-  if (tErr) console.error(tErr); else console.table(teams);
+  if (tErr) {
+    console.error('Teams Error:', tErr);
+  } else {
+    console.log('Teams count:', teams?.length);
+    console.log('Teams data:', JSON.stringify(teams, null, 2));
+  }
 
   console.log('\n--- Checking Participants ---');
   const { data: participants, error: pErr } = await insforge.database.from('participants').select('*');

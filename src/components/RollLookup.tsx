@@ -1,359 +1,449 @@
 import { useState, type FormEvent } from "react";
-import { AnimatePresence, motion } from "motion/react";
-import { Reveal, WordReveal } from "./Reveal";
+import { motion, AnimatePresence } from "motion/react";
+import { useAuthStore } from "@/store/authStore";
+import { lookupByRoll, loginByRoll } from "@/services/auth";
 
-type LookupResult = {
-  roll: string;
-  team: string;
-  captain: string;
-  members: string[];
-  station: string;
-};
+interface Props {
+  open: boolean;
+  onClose: () => void;
+}
 
-type Status = "idle" | "loading" | "success" | "error";
+type Step = "roll" | "team-info" | "code" | "loading" | "error";
 
-export function RollLookup() {
+export function RollLookup({ open, onClose }: Props) {
+  const setSession = useAuthStore((s) => s.setSession);
+
+  const [step, setStep] = useState<Step>("roll");
   const [roll, setRoll] = useState("");
-  const [status, setStatus] = useState<Status>("idle");
-  const [result, setResult] = useState<LookupResult | null>(null);
+  const [teamCode, setTeamCode] = useState("");
+  const [teamInfo, setTeamInfo] = useState<Awaited<ReturnType<typeof lookupByRoll>> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    const trimmed = roll.trim();
-    if (!trimmed) {
-      setError("Enter your roll to continue.");
-      setStatus("error");
-      return;
-    }
-
-    setStatus("loading");
+  function reset() {
+    setStep("roll");
+    setRoll("");
+    setTeamCode("");
+    setTeamInfo(null);
     setError(null);
-    setResult(null);
+  }
 
-    // Backend wiring point: replace mockLookup with
-    //   const res = await fetch(`/api/roll/${encodeURIComponent(trimmed)}`)
+  function handleClose() {
+    reset();
+    onClose();
+  }
+
+  async function handleRollSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!roll.trim()) return;
+    setError(null);
+    setStep("loading");
     try {
-      const data = await mockLookup(trimmed);
-      if (!data) {
-        setError("We couldn't find that roll. Double-check and try again.");
-        setStatus("error");
-        return;
-      }
-      setResult(data);
-      setStatus("success");
-    } catch {
-      setError("Something broke on our end. Try again in a moment.");
-      setStatus("error");
+      const info = await lookupByRoll(roll.trim());
+      setTeamInfo(info);
+      setStep("team-info");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Lookup failed");
+      setStep("error");
     }
   }
 
-  function reset() {
-    setStatus("idle");
-    setResult(null);
+  async function handleCodeSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!teamCode.trim()) return;
     setError(null);
-    setRoll("");
+    setStep("loading");
+    try {
+      const session = await loginByRoll(roll.trim(), teamCode.trim());
+      setSession(session);
+      handleClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
+      setStep("code");
+    }
   }
 
   return (
-    <section id="roll" className="relative px-5 py-24 sm:px-8 sm:py-32">
-      <div className="mx-auto max-w-2xl">
-        <div className="text-center">
-          <Reveal
-            duration={0.6}
-            className="inline-block rounded-full bg-[#58CC02]/12 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#3A8400] dark:bg-transparent dark:px-0 dark:py-0 dark:text-white/45"
-          >
-            Your Hunt Begins Here
-          </Reveal>
-          <h2 className="mt-4 font-display text-[clamp(2rem,7vw,3.25rem)] font-extrabold leading-tight tracking-tight text-[#2B2B2B] dark:text-white">
-            <WordReveal text="Find your" />{" "}
-            <WordReveal
-              text="team."
-              className="gradient-text"
-              delay={0.2}
-            />
-          </h2>
-          <Reveal
-            delay={0.2}
-            className="mx-auto mt-4 max-w-md text-[17px] font-semibold leading-relaxed text-[#777] dark:text-white/65 sm:text-base"
-          >
-            Enter your student roll. We'll pull up your team, your
-            captain, and your squad.
-          </Reveal>
-        </div>
-
+    <AnimatePresence>
+      {open && (
         <motion.div
-          initial={{ opacity: 0, y: 36, rotateX: -22, scale: 0.96 }}
-          whileInView={{ opacity: 1, y: 0, rotateX: 0, scale: 1 }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.9, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-          className="relative mt-10 sm:mt-12"
-          style={{
-            perspective: "1400px",
-            transformStyle: "preserve-3d",
-            transformOrigin: "50% 0%",
-          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md touch-press"
+          onClick={handleClose}
+          role="dialog"
+          aria-modal="true"
         >
-          {/* Dark-mode glow ring */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -inset-px hidden rounded-[32px] opacity-60 blur-2xl dark:block"
-            style={{
-              background:
-                "linear-gradient(120deg, rgba(139,92,246,0.4), rgba(236,72,153,0.35), rgba(34,211,238,0.35))",
-            }}
-          />
-
-          <div
-            className="relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-5 shadow-[0_4px_0_rgba(0,0,0,0.06)] sm:p-7 dark:border-white/10 dark:bg-[#0b0717]/80 dark:shadow-none dark:backdrop-blur-xl"
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ type: "spring", stiffness: 240, damping: 22 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-[28px] border border-black/5 bg-white p-6 shadow-[0_8px_0_rgba(0,0,0,0.06),0_30px_60px_-20px_rgba(0,0,0,0.25)] sm:p-8 dark:border-white/10 dark:bg-[#0b0717]/95 dark:shadow-[0_20px_60px_-10px_rgba(139,92,246,0.3)] dark:backdrop-blur-xl"
           >
-            <AnimatePresence mode="wait" initial={false}>
-              {status !== "success" ? (
-                <motion.form
-                  key="form"
-                  onSubmit={onSubmit}
+            <AnimatePresence mode="wait">
+              {step === "roll" && (
+                <RollForm
+                  key="roll"
+                  roll={roll}
+                  setRoll={setRoll}
+                  onSubmit={handleRollSubmit}
+                />
+              )}
+
+              {step === "loading" && (
+                <motion.div
+                  key="loading"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.3 }}
+                  exit={{ opacity: 0 }}
+                  className="flex flex-col items-center gap-4 py-8"
+                >
+                  <motion.p
+                    animate={{ scale: [1, 1.1, 1] }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="text-5xl"
+                  >
+                    🔍
+                  </motion.p>
+                  <p className="text-[15px] font-bold" style={{ color: "var(--fg-muted)" }}>
+                    Looking up…
+                  </p>
+                </motion.div>
+              )}
+
+              {step === "error" && (
+                <motion.div
+                  key="error"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
                   className="flex flex-col gap-4"
                 >
-                  <label
-                    htmlFor="roll-input"
-                    className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#777] dark:text-white/55"
-                  >
-                    Student Roll
-                  </label>
-
-                  <div className="relative">
-                    <input
-                      id="roll-input"
-                      type="text"
-                      inputMode="text"
-                      autoComplete="off"
-                      autoCapitalize="characters"
-                      spellCheck={false}
-                      placeholder="e.g. 30-001"
-                      value={roll}
-                      onChange={(e) => {
-                        setRoll(e.target.value);
-                        if (status === "error") {
-                          setStatus("idle");
-                          setError(null);
-                        }
-                      }}
-                      disabled={status === "loading"}
-                      className="w-full rounded-2xl border-2 border-black/8 bg-[#FAFAFA] px-4 py-4 font-display text-2xl font-extrabold tracking-wider text-[#2B2B2B] placeholder:font-sans placeholder:text-base placeholder:font-semibold placeholder:tracking-normal placeholder:text-[#BBB] focus:border-[#58CC02] focus:bg-white focus:outline-none sm:py-5 sm:text-3xl dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:placeholder:text-white/30 dark:focus:border-white/25 dark:focus:bg-white/[0.07]"
-                    />
-                    {status === "loading" && (
-                      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
-                        <div className="absolute inset-y-0 w-1/2 shimmer" />
-                      </div>
-                    )}
-                  </div>
-
+                  <p className="text-center text-4xl">😕</p>
+                  <p className="text-center text-[15px] font-bold leading-relaxed" style={{ color: "var(--color-brand-red)" }}>
+                    {error}
+                  </p>
                   <button
-                    type="submit"
-                    disabled={status === "loading"}
-                    className="btn-press btn-press--lg btn-primary disabled:opacity-70"
+                    onClick={() => setStep("roll")}
+                    className="btn-press ripple btn-primary w-full"
                   >
-                    {status === "loading" ? (
-                      <>
-                        <Spinner />
-                        <span>Searching…</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Reveal my team</span>
-                        <Arrow />
-                      </>
-                    )}
+                    Try again
                   </button>
+                  <button
+                    onClick={handleClose}
+                    className="btn-press ripple btn-secondary w-full"
+                  >
+                    Close
+                  </button>
+                </motion.div>
+              )}
 
-                  <AnimatePresence>
-                    {error && (
-                      <motion.p
-                        initial={{ opacity: 0, y: -4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
-                        className="text-sm font-semibold text-[#C03030] dark:text-rose-300/90"
-                      >
-                        {error}
-                      </motion.p>
-                    )}
-                  </AnimatePresence>
-                </motion.form>
-              ) : (
-                <ResultCard
-                  key="result"
-                  result={result!}
-                  onReset={reset}
+              {step === "team-info" && teamInfo && (
+                <TeamInfo
+                  key="info"
+                  teamInfo={teamInfo}
+                  teamCode={teamCode}
+                  setTeamCode={setTeamCode}
+                  error={error}
+                  onContinue={() => setStep("code")}
+                  onBack={() => { setStep("roll"); setError(null); }}
+                  onClose={handleClose}
+                />
+              )}
+
+              {step === "code" && teamInfo && (
+                <CodeEntry
+                  key="code"
+                  teamInfo={teamInfo}
+                  teamCode={teamCode}
+                  setTeamCode={setTeamCode}
+                  error={error}
+                  onSubmit={handleCodeSubmit}
+                  onBack={() => setStep("team-info")}
                 />
               )}
             </AnimatePresence>
-          </div>
+          </motion.div>
         </motion.div>
-      </div>
-    </section>
+      )}
+    </AnimatePresence>
   );
 }
 
-function ResultCard({
-  result,
-  onReset,
+/* ── Step 1: Enter roll ─────────────────────────────────────── */
+
+function RollForm({
+  roll,
+  setRoll,
+  onSubmit,
 }: {
-  result: LookupResult;
-  onReset: () => void;
+  roll: string;
+  setRoll: (v: string) => void;
+  onSubmit: (e: FormEvent) => void;
 }) {
+  const [showHelp, setShowHelp] = useState(false);
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.4 }}
+    <motion.form
+      key="roll"
+      onSubmit={onSubmit}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.3 }}
       className="flex flex-col gap-5"
     >
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#777] dark:text-white/45">
-          Roll {result.roll}
-        </span>
-        <button
-          onClick={onReset}
-          className="text-[12px] font-bold text-[#1CB0F6] underline-offset-4 transition hover:underline dark:text-white/55"
+      <div className="text-center">
+        <p className="text-4xl mb-2">🔎</p>
+        <h2 className="font-display text-[24px] font-extrabold" style={{ color: "var(--fg)" }}>
+          Find your team
+        </h2>
+        <p className="mt-1 text-[14px] font-semibold" style={{ color: "var(--fg-muted)" }}>
+          Enter your student roll to look up your team.
+        </p>
+      </div>
+
+      <label className="text-[11px] font-extrabold uppercase tracking-[0.22em]" style={{ color: "var(--fg-muted)" }}>
+        Student Roll
+      </label>
+      <input
+        type="text"
+        placeholder="e.g. 30-001"
+        value={roll}
+        onChange={(e) => setRoll(e.target.value)}
+        autoFocus
+        className="w-full rounded-2xl border-2 px-4 py-3.5 text-[20px] font-extrabold tracking-wider outline-none transition-all"
+        style={{ borderColor: "var(--border-soft)", background: "var(--surface)", color: "var(--fg)" }}
+      />
+
+      <button data-sound="heavy" type="submit" disabled={!roll.trim()} className="btn-press ripple btn-primary w-full disabled:opacity-50">
+        <span>Look up</span>
+        <Arrow />
+      </button>
+
+      <button type="button" onClick={() => setShowHelp((v) => !v)} className="w-full text-[13px] font-bold underline underline-offset-4" style={{ color: "var(--fg-muted)" }}>
+        {showHelp ? "Hide help" : "Need help?"}
+      </button>
+
+      {showHelp && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          exit={{ opacity: 0, height: 0 }}
+          className="overflow-hidden rounded-2xl border-2 p-4"
+          style={{ borderColor: "var(--border-soft)", background: "rgba(28,176,246,0.04)" }}
         >
-          Search another
+          <ul className="flex flex-col gap-2 text-[13px] font-semibold leading-relaxed" style={{ color: "var(--fg-muted)" }}>
+            <li>🔑 <strong style={{ color: "var(--fg)" }}>Roll number</strong> was provided during registration.</li>
+            <li>👥 Once found, you&apos;ll see your <strong style={{ color: "var(--fg)" }}>team name</strong> and <strong style={{ color: "var(--fg)" }}>squad members</strong>.</li>
+            <li>🔐 Enter the <strong style={{ color: "var(--fg)" }}>team code</strong> shared by your team leader to log in.</li>
+            <li>❓ If you don&apos;t know your roll or team, ask your <strong style={{ color: "var(--fg)" }}>event coordinator</strong>.</li>
+          </ul>
+        </motion.div>
+      )}
+
+      <p className="text-center text-[11px] font-semibold" style={{ color: "var(--fg-muted)" }}>
+        Only registered DU CSE students can participate.
+      </p>
+    </motion.form>
+  );
+}
+
+/* ── Step 2: Team info ──────────────────────────────────────── */
+
+function TeamInfo({
+  teamInfo,
+  teamCode,
+  setTeamCode,
+  error,
+  onContinue,
+  onBack,
+  onClose,
+}: {
+  teamInfo: Awaited<ReturnType<typeof lookupByRoll>>;
+  teamCode: string;
+  setTeamCode: (v: string) => void;
+  error: string | null;
+  onContinue: () => void;
+  onBack: () => void;
+  onClose: () => void;
+}) {
+  const { participant, team, members } = teamInfo;
+
+  return (
+    <motion.div
+      key="info"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.35 }}
+      className="flex flex-col gap-5"
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-extrabold uppercase tracking-[0.22em]" style={{ color: "var(--fg-muted)" }}>
+          Roll {participant.roll}
+        </span>
+        <button onClick={onClose} className="text-[12px] font-bold underline underline-offset-4" style={{ color: "var(--fg-muted)" }}>
+          Close
         </button>
       </div>
 
       <div>
-        <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#777] dark:text-white/45">
+        <p className="text-[11px] font-extrabold uppercase tracking-[0.22em]" style={{ color: "var(--fg-muted)" }}>
           Your team
-        </div>
-        <div className="mt-1.5 font-display text-3xl font-extrabold tracking-tight gradient-text sm:text-4xl">
-          {result.team}
-        </div>
+        </p>
+        <p className="mt-1 font-display text-[28px] font-extrabold tracking-tight gradient-text">
+          {team.name}
+        </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <InfoTile label="Captain" value={result.captain} accent="green" />
-        <InfoTile label="Start station" value={result.station} accent="blue" />
-      </div>
+      <p className="text-[13px] font-semibold leading-relaxed" style={{ color: "var(--fg-muted)" }}>
+        Welcome, <strong style={{ color: "var(--fg)" }}>{participant.name}</strong>!
+        {participant.is_leader ? " You are the team leader." : ""}
+      </p>
 
       <div>
-        <div className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#777] dark:text-white/45">
-          Squad
-        </div>
-        <ul className="mt-2 grid gap-1.5">
-          {result.members.map((m) => (
+        <p className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.22em]" style={{ color: "var(--fg-muted)" }}>
+          Squad ({members.length})
+        </p>
+        <ul className="flex flex-col gap-1">
+          {members.map((m) => (
             <li
-              key={m}
-              className="flex items-center gap-2 rounded-2xl border border-black/5 bg-[#FAFAFA] px-3 py-2.5 text-[15px] font-semibold text-[#2B2B2B] dark:border-white/5 dark:bg-white/[0.02] dark:text-white/85"
+              key={m.name}
+              className="flex items-center gap-2 rounded-2xl px-3 py-2 text-[14px] font-semibold"
+              style={{
+                background: m.name === participant.name ? "rgba(88,204,2,0.08)" : "var(--border-soft)",
+                color: m.name === participant.name ? "var(--color-brand-green)" : "var(--fg)",
+              }}
             >
-              <Dot />
-              {m}
+              {m.is_leader ? <span>👑</span> : <span className="w-4 text-center text-[10px]">•</span>}
+              {m.name}
+              {m.name === participant.name ? " (You)" : ""}
             </li>
           ))}
         </ul>
       </div>
+
+      <div className="rounded-2xl p-5" style={{ background: "rgba(28,176,246,0.06)", border: "1px solid rgba(28,176,246,0.15)" }}>
+        <p className="text-[12px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-blue)" }}>
+          🔑 Enter Team Code
+        </p>
+        <p className="mt-1 text-[13px] font-semibold" style={{ color: "var(--fg-muted)" }}>
+          To verify and log in, enter your team&apos;s secret code.
+        </p>
+        <input
+          type="text"
+          placeholder="e.g. PHX2026"
+          value={teamCode}
+          onChange={(e) => setTeamCode(e.target.value.toUpperCase())}
+          autoCapitalize="characters"
+          className="mt-3 w-full rounded-2xl border-2 px-4 py-3 text-[18px] font-extrabold tracking-widest uppercase outline-none transition-all"
+          style={{ borderColor: "var(--border-soft)", background: "var(--surface)", color: "var(--fg)" }}
+        />
+        {error && (
+          <p className="mt-2 text-[13px] font-bold" style={{ color: "var(--color-brand-red)" }}>
+            {error}
+          </p>
+        )}
+      </div>
+
+      <button
+        data-sound="success"
+        onClick={onContinue}
+        disabled={!teamCode.trim()}
+        className="btn-press ripple btn-primary w-full disabled:opacity-50"
+      >
+        <span>Verify &amp; Log In</span>
+        <Arrow />
+      </button>
+
+      <button onClick={onBack} className="w-full text-[13px] font-bold underline underline-offset-4" style={{ color: "var(--fg-muted)" }}>
+        ← Different roll
+      </button>
     </motion.div>
   );
 }
 
-function InfoTile({
-  label,
-  value,
-  accent,
+/* ── Step 3: Code entry (focused view) ──────────────────────── */
+
+function CodeEntry({
+  teamInfo,
+  teamCode,
+  setTeamCode,
+  error,
+  onSubmit,
+  onBack,
 }: {
-  label: string;
-  value: string;
-  accent: "green" | "blue";
+  teamInfo: Awaited<ReturnType<typeof lookupByRoll>>;
+  teamCode: string;
+  setTeamCode: (v: string) => void;
+  error: string | null;
+  onSubmit: (e: FormEvent) => void;
+  onBack: () => void;
 }) {
-  const bg = accent === "green" ? "bg-[#E8FFD1]" : "bg-[#DCF1FE]";
-  const fg = accent === "green" ? "text-[#3A8400]" : "text-[#0E6E9C]";
   return (
-    <div
-      className={`rounded-2xl ${bg} px-4 py-3 dark:bg-white/[0.03] dark:ring-1 dark:ring-white/10`}
+    <motion.form
+      key="code"
+      onSubmit={onSubmit}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.35 }}
+      className="flex flex-col gap-5"
     >
-      <div
-        className={`text-[10px] font-extrabold uppercase tracking-[0.22em] ${fg} opacity-80 dark:text-white/45`}
-      >
-        {label}
+      <div className="text-center">
+        <p className="text-4xl mb-2">🔑</p>
+        <h2 className="font-display text-[24px] font-extrabold" style={{ color: "var(--fg)" }}>
+          Enter Team Code
+        </h2>
+        <p className="mt-1 text-[14px] font-semibold" style={{ color: "var(--fg-muted)" }}>
+          For <strong style={{ color: "var(--fg)" }}>{teamInfo.team.name}</strong>
+        </p>
       </div>
-      <div
-        className={`mt-1 font-display text-base font-extrabold tracking-tight ${fg} dark:text-white sm:text-lg`}
+
+      <input
+        type="text"
+        placeholder="e.g. PHX2026"
+        value={teamCode}
+        onChange={(e) => setTeamCode(e.target.value.toUpperCase())}
+        autoFocus
+        autoCapitalize="characters"
+        className="w-full rounded-2xl border-2 px-4 py-4 text-[24px] font-extrabold tracking-[0.3em] text-center uppercase outline-none transition-all"
+        style={{ borderColor: "var(--border-soft)", background: "var(--surface)", color: "var(--fg)" }}
+      />
+
+      {error && (
+        <p className="text-[13px] font-bold text-center" style={{ color: "var(--color-brand-red)" }}>
+          {error}
+        </p>
+      )}
+
+      <button
+        data-sound="success"
+        type="submit"
+        disabled={!teamCode.trim()}
+        className="btn-press ripple btn-primary w-full disabled:opacity-50"
       >
-        {value}
-      </div>
-    </div>
+        <span>Log In</span>
+        <Arrow />
+      </button>
+
+      <button type="button" onClick={onBack} className="w-full text-[13px] font-bold underline underline-offset-4" style={{ color: "var(--fg-muted)" }}>
+        ← Back
+      </button>
+    </motion.form>
   );
 }
 
-function Spinner() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 16 16"
-      fill="none"
-      className="animate-spin"
-      aria-hidden
-    >
-      <circle
-        cx="8"
-        cy="8"
-        r="6"
-        stroke="rgba(255,255,255,0.45)"
-        strokeWidth="2"
-      />
-      <path
-        d="M14 8a6 6 0 00-6-6"
-        stroke="white"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
+/* ── Shared ──────────────────────────────────────────────────── */
 
 function Arrow() {
   return (
     <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path
-        d="M3 8h10m0 0L8.5 3.5M13 8l-4.5 4.5"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M3 8h10m0 0L8.5 3.5M13 8l-4.5 4.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
-}
-
-function Dot() {
-  return (
-    <span
-      className="inline-block h-2 w-2 rounded-full"
-      style={{
-        background: "#58CC02",
-      }}
-    />
-  );
-}
-
-// Temporary placeholder until backend hooks up.
-async function mockLookup(roll: string): Promise<LookupResult | null> {
-  await new Promise((r) => setTimeout(r, 900));
-  if (roll.toLowerCase() === "demo") return null;
-  return {
-    roll,
-    team: "The Ghost Bytes",
-    captain: "Rafsan Hossain",
-    station: "Curzon Hall · Gate 2",
-    members: [
-      "Rafsan Hossain (Captain)",
-      "Nabila Karim",
-      "Tahmid Rahman",
-      "Sumaiya Akter",
-    ],
-  };
 }

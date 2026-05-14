@@ -3,7 +3,7 @@ import { Hero } from "@/components/Hero";
 import { About } from "@/components/About";
 import { HowItWorks } from "@/components/HowItWorks";
 import { SpotsMarquee } from "@/components/SpotsMarquee";
-import { RollLookup } from "@/components/RollLookup";
+import { LiveLeaderboard } from "@/components/LiveLeaderboard";
 import { Footer } from "@/components/Footer";
 import { Backdrop } from "@/components/Backdrop";
 
@@ -21,7 +21,7 @@ export default function LandingPage() {
         <About />
         <HowItWorks />
         <SpotsMarquee />
-        <RollLookup />
+        <LiveLeaderboard />
       </main>
       <Footer />
     </div>

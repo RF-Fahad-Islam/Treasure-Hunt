@@ -5,6 +5,8 @@ import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Reveal } from "@/components/Reveal";
 import { SuccessOverlay } from "@/components/SuccessOverlay";
+import { BroadcastBanner } from "@/components/BroadcastBanner";
+import { useBroadcastListener } from "@/hooks/useBroadcastListener";
 import { useSession, useAuthStore } from "@/store/authStore";
 import { fetchSpotLeaderData, approveTeam, MINI_GAME_POINTS } from "@/services/spotLeader";
 import type { SpotLeaderData, ArrivingTeam } from "@/services/spotLeader";
@@ -24,6 +26,8 @@ export default function SpotLeaderPage() {
   const [penaltyMinutes, setPenaltyMinutes] = useState(0);
   const [showSuccess, setShowSuccess] = useState(false);
   const [successPoints, setSuccessPoints] = useState(0);
+  const sessionRole = session?.role === "spot-leader" ? "spot-leader" : null;
+  const broadcast = useBroadcastListener(sessionRole);
 
   const load = useCallback(async () => {
     if (!spotId) return;
@@ -120,6 +124,8 @@ export default function SpotLeaderPage() {
         subtitle="Team awarded successfully"
       />
 
+      <BroadcastBanner broadcast={broadcast} />
+
       <div className="absolute right-4 top-4 z-20 flex items-center gap-3">
         {session?.role === "spot-leader" && (
           <span className="rounded-full bg-[var(--surface)] px-4 py-2 text-[13px] font-bold shadow-lg" style={{ color: "var(--fg-muted)" }}>
@@ -128,7 +134,7 @@ export default function SpotLeaderPage() {
         )}
         <button
           onClick={clearSession}
-          className="rounded-2xl px-5 py-2.5 text-[13px] font-bold uppercase tracking-wide transition-opacity hover:opacity-70 shadow-lg"
+          className="ripple touch-press rounded-2xl px-5 py-2.5 text-[13px] font-bold uppercase tracking-wide transition-opacity hover:opacity-70 shadow-lg"
           style={{ color: "var(--fg-muted)", background: "var(--surface)" }}
         >
           🚪 Logout
@@ -178,9 +184,10 @@ export default function SpotLeaderPage() {
                 </p>
               </div>
               <button
+                data-sound="heavy"
                 onClick={load}
                 disabled={loading}
-                className="btn-press rounded-2xl px-6 py-3 text-[13px] font-extrabold uppercase tracking-wide"
+                className="btn-press ripple rounded-2xl px-6 py-3 text-[13px] font-extrabold uppercase tracking-wide"
                 style={{
                   background: "var(--surface)",
                   border: "2px solid var(--border-soft)",
@@ -241,7 +248,7 @@ export default function SpotLeaderPage() {
               >
                 <Reveal>
                   <div
-                    className="card p-8 transition-all"
+                    className="card p-8 transition-all touch-press ripple"
                     style={{
                       background: successId === team.teamId
                         ? "linear-gradient(135deg, rgba(88,204,2,0.08), rgba(88,204,2,0.02))"
@@ -286,10 +293,11 @@ export default function SpotLeaderPage() {
                       </div>
 
                       <motion.button
+                        data-sound="success"
                         whileTap={{ scale: 0.92 }}
                         onClick={() => openMiniGame(team)}
                         disabled={successId === team.teamId}
-                        className="btn-press shrink-0 rounded-2xl px-8 py-4 text-[15px] font-extrabold uppercase tracking-wide text-white transition-all"
+                        className="btn-press ripple shrink-0 rounded-2xl px-8 py-4 text-[15px] font-extrabold uppercase tracking-wide text-white transition-all"
                         style={{
                           background:
                             successId === team.teamId
@@ -383,7 +391,7 @@ export default function SpotLeaderPage() {
                       key={p}
                       whileTap={{ scale: 0.9 }}
                       onClick={() => setSelectedPoints(p)}
-                      className="btn-press rounded-2xl px-5 py-3 text-[16px] font-extrabold transition-all"
+                      className="btn-press ripple rounded-2xl px-5 py-3 text-[16px] font-extrabold transition-all"
                       style={{
                         background: selectedPoints === p ? "var(--color-brand-gold)" : "var(--border-soft)",
                         color: selectedPoints === p ? "#000" : "var(--fg-muted)",
@@ -410,7 +418,7 @@ export default function SpotLeaderPage() {
                   <motion.button
                     whileTap={{ scale: 0.9 }}
                     onClick={() => setPenaltyMinutes(Math.max(0, penaltyMinutes - 1))}
-                    className="btn-press flex h-12 w-12 items-center justify-center rounded-2xl text-[22px] font-extrabold"
+                    className="btn-press ripple flex h-12 w-12 items-center justify-center rounded-2xl text-[22px] font-extrabold"
                     style={{ background: "var(--border-soft)", color: "var(--fg)" }}
                   >
                     −
@@ -421,7 +429,7 @@ export default function SpotLeaderPage() {
                   <motion.button
                     whileTap={{ scale: 0.9 }}
                     onClick={() => setPenaltyMinutes(penaltyMinutes + 1)}
-                    className="btn-press flex h-12 w-12 items-center justify-center rounded-2xl text-[22px] font-extrabold"
+                    className="btn-press ripple flex h-12 w-12 items-center justify-center rounded-2xl text-[22px] font-extrabold"
                     style={{ background: "var(--border-soft)", color: "var(--fg)" }}
                   >
                     +
@@ -429,7 +437,7 @@ export default function SpotLeaderPage() {
                   {penaltyMinutes > 0 && (
                     <button
                       onClick={() => setPenaltyMinutes(0)}
-                      className="btn-press rounded-2xl px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide"
+                      className="btn-press ripple rounded-2xl px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide"
                       style={{ color: "var(--fg-muted)" }}
                     >
                       ✕ Clear
@@ -443,9 +451,10 @@ export default function SpotLeaderPage() {
                   initial={{ x: -20, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
                   transition={{ delay: 0.3 }}
+                  data-sound="success"
                   onClick={handleApproveWithMiniGame}
                   disabled={selectedPoints === null || dialogBusy}
-                  className="btn-press w-full rounded-2xl px-8 py-4 text-[16px] font-extrabold uppercase tracking-wide text-white transition-all"
+                  className="btn-press ripple w-full rounded-2xl px-8 py-4 text-[16px] font-extrabold uppercase tracking-wide text-white transition-all"
                   style={{
                     background: "var(--color-brand-gold)",
                     boxShadow: "0 6px 0 0 color-mix(in srgb, var(--color-brand-gold) 60%, black)",
@@ -462,7 +471,7 @@ export default function SpotLeaderPage() {
                   transition={{ delay: 0.35 }}
                   onClick={handleApproveSkip}
                   disabled={dialogBusy}
-                  className="btn-press w-full rounded-2xl px-8 py-4 text-[16px] font-extrabold uppercase tracking-wide text-white transition-all"
+                  className="btn-press ripple w-full rounded-2xl px-8 py-4 text-[16px] font-extrabold uppercase tracking-wide text-white transition-all"
                   style={{
                     background: "var(--color-brand-green)",
                     boxShadow: "0 6px 0 0 color-mix(in srgb, var(--color-brand-green) 60%, black)",
@@ -478,7 +487,7 @@ export default function SpotLeaderPage() {
                   transition={{ delay: 0.4 }}
                   onClick={closeMiniGame}
                   disabled={dialogBusy}
-                  className="btn-press w-full rounded-2xl px-8 py-4 text-[15px] font-extrabold uppercase tracking-wide transition-all"
+                  className="btn-press ripple w-full rounded-2xl px-8 py-4 text-[15px] font-extrabold uppercase tracking-wide transition-all"
                   style={{
                     background: "var(--surface)",
                     border: "3px solid var(--border-soft)",

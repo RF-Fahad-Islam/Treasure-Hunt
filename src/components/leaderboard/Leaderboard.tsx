@@ -24,6 +24,7 @@ export function Leaderboard({ entries, currentTeamName }: Props) {
     <>
       <div className="flex justify-center">
         <button
+          data-sound="heavy"
           onClick={() => setOpen(true)}
           className="w-full rounded-2xl py-4 text-[15px] font-extrabold uppercase tracking-wide text-white transition-transform hover:scale-105"
           style={{
@@ -41,23 +42,32 @@ export function Leaderboard({ entries, currentTeamName }: Props) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 touch-press"
             onClick={() => setOpen(false)}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.3 }}
-              className="w-full max-w-md rounded-3xl border overflow-hidden"
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              transition={{ type: "spring", stiffness: 350, damping: 30, mass: 0.9 }}
+              drag="y"
+              dragConstraints={{ top: 0, bottom: 200 }}
+              dragElastic={{ top: 0.05, bottom: 0.3 }}
+              onDragEnd={(_, info) => { if (info.offset.y > 100) setOpen(false); }}
+              className="w-full max-w-md rounded-t-[28px] sm:rounded-3xl border overflow-hidden"
               style={{
+                maxHeight: "85vh",
                 background: "#140e24",
                 borderColor: "rgba(55,65,81,1)",
                 boxShadow: "0 0 40px rgba(20,14,36,0.9)",
               }}
               onClick={(e) => e.stopPropagation()}
             >
+              {/* Drag handle (mobile) */}
+              <div className="flex justify-center pt-2.5 pb-1 sm:hidden">
+                <div className="h-1 w-10 rounded-full" style={{ background: "rgba(255,255,255,0.2)" }} />
+              </div>
               <div
                 className="flex items-center justify-between p-6 border-b"
                 style={{ background: "#0b0714", borderColor: "rgba(31,41,55,1)" }}
@@ -100,7 +110,7 @@ export function Leaderboard({ entries, currentTeamName }: Props) {
 
                   return (
                     <motion.div
-                      key={entry.name}
+                      key={entry.id}
                       initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.25, delay: entry.rank * 0.03 }}

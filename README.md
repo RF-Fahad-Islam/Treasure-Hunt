@@ -8,11 +8,13 @@ Real-time treasure hunt platform for the University of Dhaka, Department of Comp
 
 | Layer          | Technology                              |
 | -------------- | --------------------------------------- |
-| Frontend       | Vite 6, React 19, TypeScript, Tailwind v4, Motion |
-| Backend        | InsForge (PostgreSQL + REST API)        |
+| Frontend       | Vite 6, React 19, TypeScript, Tailwind v4, Motion, Chart.js |
+| Backend        | InsForge (PostgreSQL + REST API + WebSockets) |
 | SDK            | `@insforge/sdk`                         |
 | Auth           | Custom sessions via Zustand + localStorage |
 | State          | Zustand with persist middleware         |
+| Charts         | Chart.js + react-chartjs-2              |
+| Realtime       | InsForge native WebSocket pub/sub       |
 
 ---
 
@@ -38,10 +40,11 @@ Team login filters by `is_leader = true` — non‑leaders cannot log in.
 ### 3. Team Dashboard (`/team`)
 
 - **Clue card** — shows clue text + optional `image_url` + spot location hint
-- **Timer** — backend-driven countdown (default 40 min). On timeout: popup with **Reveal Answer** (0 pts, move on) or **Keep Searching** (still eligible for +100)
-- **Leaderboard** — sorted by `total_points DESC` → `total_penalty_seconds ASC` (auto‑refreshes every 15s)
+- **Timer** — backend-driven countdown (default 40 min). On timeout: popup with **Reveal Answer** (0 pts, move on)
+- **Leaderboard** — sorted by `total_points DESC` → `total_penalty_seconds ASC` (realtime via WebSocket — updates instantly)
 - **Progress bar** — visual clue completion tracker
 - **Confetti** 🎉 on completing a clue
+- **Broadcasts** — admin announcements appear as a top‑of‑screen toast
 
 ### 4. Spot Leader (`/spot-leader`)
 
@@ -55,12 +58,37 @@ Team login filters by `is_leader = true` — non‑leaders cannot log in.
   | **Cancel** | Close dialog |
 
 - Approval: marks clue completed, awards points, updates penalty seconds, moves team to next clue, starts next timer
+- **Broadcasts** — admin announcements appear as a top‑of‑screen toast
 
 ### 5. Results (`/results`)
 
 - Public page showing final standings
 - **Podium** for top 3 (🥇🥈🥉)
 - Full ranked list with scores and penalties
+
+---
+
+## Realtime Architecture
+
+Two dedicated WebSocket channels via InsForge realtime:
+
+| Channel | Purpose | Publisher | Subscribers |
+| ------- | ------- | --------- | ----------- |
+| `leaderboard` | Live team score updates | DB trigger on `teams` table | Landing page, Team Dashboard |
+| `broadcast` | Admin announcements | Admin Panel | Spot Leader, Team Dashboard |
+
+### `leaderboard` channel
+
+- A PostgreSQL trigger (`leaderboard_teams_update`) fires on `INSERT` or `UPDATE` on the `teams` table
+- Calls `realtime.publish('leaderboard', 'team_updated', jsonb_payload)` with the full team row
+- Frontend subscribes via `insforge.realtime.subscribe('leaderboard')` and listens for `team_updated` events
+- On each event, the local leaderboard state is re-sorted and re-ranked instantly
+
+### `broadcast` channel
+
+- Admin sends messages via the Broadcast tab in the Admin Panel
+- Uses `insforge.realtime.publish('broadcast', 'new_broadcast', payload)` with audience field (`all` / `spot-leaders` / `teams`)
+- `BroadcastBanner` component on each page filters by audience and shows a dismissible animated toast
 
 ---
 
@@ -162,7 +190,20 @@ Team login filters by `is_leader = true` — non‑leaders cannot log in.
 
 ---
 
-## Key Decisions
+## Admin Panel
+
+Tabbed interface with full database CRUD:
+
+| Tab | Features |
+| --- | -------- |
+| **Dashboard** | Stats cards + 4 Chart.js charts (team scores, participant assignment, clue difficulty, hunt progress) + reset |
+| **Participants** | Add, inline edit, delete; assigned/unassigned lists |
+| **Teams** | Generate, reshuffle, preview with drag‑style member moves + leader transfer, save with route generation |
+| **Spots** | Create, inline edit, delete (cascades to clues) |
+| **Clues** | Create (per‑spot), filter by spot, delete |
+| **Event Config** | Event name, timers, points, start time; one‑click Start/Pause hunt toggle |
+| **Sessions** | View active sessions (name, role, device, timestamp); one‑click kick |
+| **Broadcast** | Send realtime announcements to All / Spot Leaders / Teams |
 
 ---
 
@@ -173,20 +214,26 @@ src/
 ├── pages/
 │   ├── Landing/          Public landing page
 │   ├── Login/            Role selector + auth forms
-│   ├── TeamDashboard/    Clue, timer, leaderboard
-│   ├── SpotLeader/       Approve teams, mini‑game, penalties
-│   ├── Admin/            Team generator, participant management
+│   ├── TeamDashboard/    Clue, timer, realtime leaderboard, broadcast banner
+│   ├── SpotLeader/       Approve teams, mini‑game, penalties, broadcast banner
+│   ├── Admin/            Full CRUD + 8 tabs + charts + broadcast
 │   └── Results/          Podium + final standings
 ├── components/
 │   ├── auth/             ProtectedRoute
 │   ├── timer/            CountdownTimer
-│   ├── leaderboard/      Leaderboard list
+│   ├── leaderboard/      Leaderboard list (realtime)
+│   ├── charts/           Reusable Chart.js wrappers (BarChartCard, DoughnutChart, ChartCard)
+│   ├── BroadcastBanner.tsx  Animated admin broadcast toast
 │   ├── Confetti.tsx      Celebration effect
 │   └── ...shared         Backdrop, Logo, ThemeToggle, Reveal, CountUp etc.
+├── hooks/
+│   ├── useLeaderboardRealtime.ts  Subscribes to leaderboard channel
+│   ├── useBroadcastListener.ts    Subscribes to broadcast channel
+│   └── useTheme.ts
 ├── services/
 │   ├── auth.ts           Login functions for all roles
-│   ├── admin.ts          Team generation, participant CRUD
-│   ├── team.ts           Dashboard data, leaderboard, reveal/keep-searching
+│   ├── admin.ts          Team generation, participant CRUD, spot/clue CRUD, reset
+│   ├── team.ts           Dashboard data, leaderboard fetch, reveal
 │   └── spotLeader.ts     Fetch arriving teams, approve with minigame/penalty
 ├── store/
 │   └── authStore.ts      Zustand session + localStorage persistence
@@ -196,6 +243,7 @@ src/
 │   └── insforge.ts       InsForge SDK client
 └── routes/
     └── Router.tsx         All routes with LoginGate + ProtectedRoute
+migrations/                Database migrations (realtime channels, triggers)
 ```
 
 ---
@@ -210,7 +258,9 @@ src/
 | Admin auth via `VITE_ADMIN_PASSWORD` | Simple env-var guard, no DB table |
 | `team_routes` as dual-purpose | Route ordering + per-clue progress (replaces separate `spot_logs`) |
 | First team member = leader | Auto‑assigned during generation, only leader can login |
-| Polling (15s) for realtime | InsForge realtime subscriptions available as future upgrade |
+| InsForge WebSocket realtime | Instant leaderboard updates; DB trigger publishes on team changes |
+| Chart.js over recharts | Lighter bundle, native canvas rendering |
+| `realtime.channels` + DB triggers | Decoupled pub/sub: schema changes auto‑notify frontend without API calls |
 
 ---
 
@@ -228,6 +278,7 @@ VITE_ADMIN_PASSWORD=<admin-password>
 
 - **Node.js 20+**
 - **Git**
+- **InsForge CLI** (`npx @insforge/cli`) for migrations
 
 ## Quick Start
 
@@ -236,6 +287,11 @@ git clone <repo-url>
 cd Treasure-Hunt
 npm install
 npm run dev          # → http://localhost:5173
+```
+
+Apply database migrations (after linking project):
+```bash
+npx @insforge/cli db migrations up --all
 ```
 
 ## Scripts

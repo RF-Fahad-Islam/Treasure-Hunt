@@ -667,7 +667,7 @@ feat: authentication system
 
 ---
 
-# Phase 2 — Backend Schema [ ]
+# Phase 2 — Backend Schema [x]
 
 ## Goal
 
@@ -677,7 +677,7 @@ No UI.
 
 ---
 
-## Sub Problem 2.1 [ ]
+## Sub Problem 2.1 [x]
 
 Create collections.
 
@@ -697,7 +697,7 @@ CRUD works.
 
 ---
 
-## Sub Problem 2.2 [ ]
+## Sub Problem 2.2 [x]
 
 Seed test data.
 
@@ -722,7 +722,7 @@ feat: initialize backend schema
 
 ---
 
-# Phase 3 — Team Generation
+# Phase 3 — Team Generation [x]
 
 ## Goal
 
@@ -730,7 +730,7 @@ Randomized teams.
 
 ---
 
-## Sub Problem 3.1
+## Sub Problem 3.1 [x]
 
 Team generator.
 
@@ -746,7 +746,7 @@ admin generates teams
 
 ---
 
-## Sub Problem 3.2
+## Sub Problem 3.2 [x]
 
 Random clue routes.
 

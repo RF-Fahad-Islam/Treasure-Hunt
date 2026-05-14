@@ -1,7 +1,9 @@
 import { useEffect } from "react";
 import { Navigate, Routes, Route, useNavigate } from "react-router-dom";
+import { AnimatePresence } from "motion/react";
 import { useSession, useAuthStore } from "@/store/authStore";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { PageTransition } from "@/components/PageTransition";
 import LandingPage from "@/pages/Landing";
 import LoginPage from "@/pages/Login";
 import TeamDashboardPage from "@/pages/TeamDashboard";
@@ -49,45 +51,47 @@ function SessionGuard({ children }: { children: React.ReactNode }) {
  */
 export function Router() {
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/login" element={<LoginGate />} />
+    <AnimatePresence mode="wait">
+      <Routes>
+        <Route path="/" element={<PageTransition><LandingPage /></PageTransition>} />
+        <Route path="/login" element={<PageTransition><LoginGate /></PageTransition>} />
 
-      <Route
-        path="/team"
-        element={
-          <ProtectedRoute role="team">
-            <SessionGuard>
-              <TeamDashboardPage />
-            </SessionGuard>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/spot-leader"
-        element={
-          <ProtectedRoute role="spot-leader">
-            <SessionGuard>
-              <SpotLeaderPage />
-            </SessionGuard>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin"
-        element={
-          <ProtectedRoute role="admin">
-            <SessionGuard>
-              <AdminPage />
-            </SessionGuard>
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/team"
+          element={
+            <ProtectedRoute role="team">
+              <SessionGuard>
+                <PageTransition><TeamDashboardPage /></PageTransition>
+              </SessionGuard>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/spot-leader"
+          element={
+            <ProtectedRoute role="spot-leader">
+              <SessionGuard>
+                <PageTransition><SpotLeaderPage /></PageTransition>
+              </SessionGuard>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute role="admin">
+              <SessionGuard>
+                <PageTransition><AdminPage /></PageTransition>
+              </SessionGuard>
+            </ProtectedRoute>
+          }
+        />
 
-      <Route path="/results" element={<ResultsPage />} />
+        <Route path="/results" element={<PageTransition><ResultsPage /></PageTransition>} />
 
-      {/* Catch-all → landing */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        {/* Catch-all → landing */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AnimatePresence>
   );
 }
