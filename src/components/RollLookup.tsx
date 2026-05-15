@@ -130,6 +130,12 @@ export function RollLookup({ open, onClose, initialStep = "roll" }: Props) {
                   setRoll={setRoll}
                   onSubmit={handleRollSubmit}
                   onRegister={() => setStep("register")}
+                  onOpenLobby={() => {
+                    handleClose();
+                    setTimeout(() => {
+                      window.dispatchEvent(new CustomEvent("open-lobby"));
+                    }, 300);
+                  }}
                 />
               )}
 
@@ -240,11 +246,13 @@ function RollForm({
   setRoll,
   onSubmit,
   onRegister,
+  onOpenLobby,
 }: {
   roll: string;
   setRoll: (v: string) => void;
   onSubmit: (e: FormEvent) => void;
   onRegister: () => void;
+  onOpenLobby: () => void;
 }) {
   const [showHelp, setShowHelp] = useState(false);
 
@@ -321,6 +329,18 @@ function RollForm({
           className="btn-press ripple btn-secondary w-full"
         >
           📝 Register for the Hunt
+        </button>
+        <button
+          type="button"
+          onClick={onOpenLobby}
+          className="btn-press ripple btn-secondary w-full"
+          style={{ 
+            background: "rgba(88,204,2,0.08)", 
+            color: "var(--color-brand-green)", 
+            borderColor: "rgba(88,204,2,0.2)" 
+          }}
+        >
+          🚪 Enter Lobby Directly
         </button>
       </div>
     </motion.form>

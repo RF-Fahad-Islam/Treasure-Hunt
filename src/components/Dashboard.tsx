@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { SuccessOverlay } from "./SuccessOverlay";
 import { ExpiredOverlay } from "./ExpiredOverlay";
+import { ConfirmDialog } from "./ConfirmDialog";
 import {
   LeaderboardOverlay,
   type TeamStanding,
@@ -12,7 +13,7 @@ export type HuntStatus = "Active Hunt" | "Mini-game" | "Arrived";
 export type DashboardData = {
   roll: string;
   team: string;
-  members: string[]; // Captain marked inline, e.g. "Rafsan Hossain (Captain)".
+  members: string[]; 
   clue: string;
   points: number;
   penalties: number;
@@ -29,15 +30,35 @@ type CelebrationPayload = {
 };
 
 export function Dashboard({ data }: { data: DashboardData }) {
-  const [celebration, setCelebration] = useState<CelebrationPayload | null>(
-    null
-  );
+  const [celebration, setCelebration] = useState<CelebrationPayload | null>(null);
   const [expired, setExpired] = useState(false);
+  const [showConfirmReveal, setShowConfirmReveal] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
+  const [localPenalties, setLocalPenalties] = useState(data.penalties);
+  
   const prevStatusRef = useRef<HuntStatus>(data.status);
 
+  // Overtime penalty logic: 1 point every 3 minutes
+  useEffect(() => {
+    if (data.status !== "Active Hunt") return;
+    
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const overtimeMs = now - data.timerEndsAt;
+      if (overtimeMs > 0) {
+        // Calculate penalty based on total overtime
+        const threeMinMs = 3 * 60 * 1000;
+        const totalPenalty = Math.floor(overtimeMs / threeMinMs);
+        if (totalPenalty > 0) {
+          setLocalPenalties(data.penalties + totalPenalty);
+        }
+      }
+    }, 10000); // Check every 10s
+
+    return () => clearInterval(interval);
+  }, [data.status, data.timerEndsAt, data.penalties]);
+
   // Fire celebration when status transitions to "Arrived".
-  // Backend will eventually push the points/rank delta with the status change.
   useEffect(() => {
     const prev = prevStatusRef.current;
     if (prev !== "Arrived" && data.status === "Arrived") {
@@ -45,6 +66,13 @@ export function Dashboard({ data }: { data: DashboardData }) {
     }
     prevStatusRef.current = data.status;
   }, [data.status]);
+
+  const handleRevealSpot = () => {
+    setShowConfirmReveal(false);
+    setExpired(false);
+    // Logic to reveal spot would go here (e.g. backend call)
+    console.log("Spot revealed. Points: +0");
+  };
 
   return (
     <>
@@ -61,7 +89,7 @@ export function Dashboard({ data }: { data: DashboardData }) {
           status={data.status}
           onExpire={() => setExpired(true)}
         />
-        <ScoreRow points={data.points} penalties={data.penalties} />
+        <ScoreRow points={data.points} penalties={localPenalties} />
         <LeaderboardButton
           rank={data.rank}
           onClick={() => setLeaderboardOpen(true)}
@@ -89,6 +117,18 @@ export function Dashboard({ data }: { data: DashboardData }) {
       <ExpiredOverlay
         open={expired}
         onContinue={() => setExpired(false)}
+        onReveal={() => setShowConfirmReveal(true)}
+      />
+
+      <ConfirmDialog
+        open={showConfirmReveal}
+        title="Reveal Spot Location?"
+        message="If you reveal the spot location now, you will receive +0 bonus points for this clue. You will still incur any accrued time penalties. Continue?"
+        confirmLabel="Reveal Spot"
+        cancelLabel="Keep Finding"
+        destructive={true}
+        onConfirm={handleRevealSpot}
+        onCancel={() => setShowConfirmReveal(false)}
       />
 
       <LeaderboardOverlay

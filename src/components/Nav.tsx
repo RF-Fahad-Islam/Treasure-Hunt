@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Logo } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
 import { RollLookup } from "./RollLookup";
+import { LobbyModal } from "./LobbyModal";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useSession, useAuthStore } from "@/store/authStore";
 import { getAvatarUrl } from "@/lib/avatar";
@@ -26,6 +27,7 @@ export function Nav() {
 
   const [scrolled, setScrolled] = useState(false);
   const [showLookup, setShowLookup] = useState(false);
+  const [showLobby, setShowLobby] = useState(false);
   const [lookupInitialStep, setLookupInitialStep] = useState<"roll" | "register">("roll");
   const [showMenu, setShowMenu] = useState(false);
   const [confirmDef, setConfirmDef] = useState<{ title: string; message: string; destructive?: boolean } | null>(null);
@@ -42,11 +44,18 @@ export function Nav() {
       setLookupInitialStep(customEvent.detail || "roll");
       setShowLookup(true);
     };
+    
+    const handleOpenLobby = () => {
+      setShowLobby(true);
+    };
+
     window.addEventListener("open-lookup", handleOpenLookup);
+    window.addEventListener("open-lobby", handleOpenLobby);
     
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("open-lookup", handleOpenLookup);
+      window.removeEventListener("open-lobby", handleOpenLobby);
     };
   }, []);
 
@@ -67,6 +76,7 @@ export function Nav() {
   return (
     <>
       <RollLookup open={showLookup} onClose={() => setShowLookup(false)} initialStep={lookupInitialStep} />
+      <LobbyModal open={showLobby} onClose={() => setShowLobby(false)} />
       <ConfirmDialog
         open={confirmDef !== null}
         title={confirmDef?.title ?? ""}
