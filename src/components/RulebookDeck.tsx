@@ -6,6 +6,7 @@ export const RULES = [
   { icon: "🗺️", title: "Initial Clue", desc: "Initially, all teams will be given a clue, and it will lead to checkpoints." },
   { icon: "📍", title: "Checkpoints", desc: "There are checkpoints where you must go. A volunteer will be present at every checkpoint." },
   { icon: "⏱️", title: "Time Interval", desc: "At each checkpoint, you will be given a task. After completing the task, there will be a 40-minute interval before you receive the next clue." },
+  { icon: "🛰️", title: "Location Access", desc: "Real-time location access is mandatory to ensure fair play and prevent cheating. Teams with disabled GPS will be flagged." },
   { icon: "🏃", title: "Team Presence", desc: "All team members must be present at each checkpoint to receive the next clue." },
   { icon: "📵", title: "Fair Play", desc: "No use of unauthorized digital aids or external help unless specified." },
   { icon: "🚫", title: "No Vehicles", desc: "Using any kind of vehicle is strictly prohibited. Teams found using vehicles will be disqualified." },

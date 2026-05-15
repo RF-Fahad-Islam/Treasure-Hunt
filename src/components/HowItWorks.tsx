@@ -60,9 +60,9 @@ const steps: Step[] = [
     body: "Participate in activities at each spot to earn up to 100 extra points based on performance.",
     optional: true,
     accent: {
-      badgeBg: "bg-[#F2EBFF]",
-      badgeFg: "text-[#6B3FE3]",
-      bar: "bg-[#8B5CF6]",
+      badgeBg: "bg-[#E0F7FA]",
+      badgeFg: "text-[#006064]",
+      bar: "bg-[#00BCD4]",
     },
   },
 ];
@@ -81,7 +81,7 @@ export function HowItWorks() {
             The Rules
           </Reveal>
           <h2 className="mt-4 font-display text-[clamp(2rem,7vw,3.25rem)] font-extrabold leading-tight tracking-tight text-[#2B2B2B] dark:text-white">
-            <WordReveal text="Four steps." />
+            <WordReveal text="Five steps." />
             <br />
             <WordReveal
               text="One winner."
