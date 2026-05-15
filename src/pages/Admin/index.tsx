@@ -34,7 +34,6 @@ import {
   resetTeam,
   resetAllHuntData,
   fetchTeamRoutes,
-  fetchTeamParticipantsWithEmails,
 } from "@/services/admin";
 import { fetchActiveSessions, adminDeactivateSession, generateLoginToken } from "@/services/auth";
 import type { SessionWithUser } from "@/services/auth";
@@ -164,11 +163,13 @@ export default function AdminPage() {
   const teamLocations = useTeamLocationsRealtime();
 
   /* ─── Login Links state ─── */
-  const [linkTeams, setLinkTeams] = useState<Awaited<ReturnType<typeof fetchTeamParticipantsWithEmails>>>([]);
+  const [teamLinksData, setTeamLinksData] = useState<{ teamId: string; teamName: string; teamCode: string; leaderId: string; leaderName: string; leaderEmail: string; leaderRoll: string }[]>([]);
+  const [teamLinks, setTeamLinks] = useState<Record<string, string>>({});
   const [linkLoading, setLinkLoading] = useState(false);
   const [linkSending, setLinkSending] = useState(false);
   const [linkResults, setLinkResults] = useState<{ ok: number; fail: number; errors: string[] } | null>(null);
   const [linkCopiedId, setLinkCopiedId] = useState<string | null>(null);
+  const [linkToLeadersOnly, setLinkToLeadersOnly] = useState(true);
   const [spotLinks, setSpotLinks] = useState<{ id: string; name: string; url: string }[]>([]);
   const [spotLinkLoading, setSpotLinkLoading] = useState<string | null>(null);
 
@@ -1481,9 +1482,52 @@ export default function AdminPage() {
 
   async function loadLinkTeams() {
     setLinkLoading(true);
+    setTeamLinks({});
     try {
-      const result = await fetchTeamParticipantsWithEmails();
-      setLinkTeams(result);
+      const { data: participants, error: pErr } = await insforge.database
+        .from("participants")
+        .select("id, name, roll, email, team_id, is_leader")
+        .not("team_id", "is", null);
+
+      if (pErr) throw new Error(pErr.message);
+      if (!participants || participants.length === 0) {
+        setTeamLinksData([]);
+        return;
+      }
+
+      const teamIds = [...new Set((participants as any[]).map((p) => p.team_id))];
+      const { data: teams, error: tErr } = await insforge.database
+        .from("teams")
+        .select("id, name, team_code")
+        .in("id", teamIds);
+
+      if (tErr) throw new Error(tErr.message);
+      const teamMap = new Map((teams ?? []).map((t: any) => [t.id, t]));
+
+      const teamMap2 = new Map<string, { teamId: string; teamName: string; teamCode: string; leaderId: string; leaderName: string; leaderEmail: string; leaderRoll: string }>();
+      for (const p of participants as any[]) {
+        const t = teamMap.get(p.team_id);
+        if (!t) continue;
+        if (!teamMap2.has(p.team_id)) {
+          teamMap2.set(p.team_id, {
+            teamId: p.team_id,
+            teamName: t.name,
+            teamCode: t.team_code,
+            leaderId: p.id,
+            leaderName: p.name,
+            leaderEmail: p.email ?? "",
+            leaderRoll: p.roll ?? "",
+          });
+        } else if (p.is_leader) {
+          const entry = teamMap2.get(p.team_id)!;
+          entry.leaderId = p.id;
+          entry.leaderName = p.name;
+          entry.leaderEmail = p.email ?? "";
+          entry.leaderRoll = p.roll ?? "";
+        }
+      }
+
+      setTeamLinksData([...teamMap2.values()].filter((e) => e.leaderEmail));
     } catch {
       flashError("Failed to load team data");
     } finally {
@@ -1491,10 +1535,40 @@ export default function AdminPage() {
     }
   }
 
+  async function handleGenerateAllTeamLinks() {
+    for (const team of teamLinksData) {
+      if (teamLinks[team.teamId]) continue;
+      try {
+        const token = await generateLoginToken("team", team.teamId, {
+          teamCode: team.teamCode,
+          targetIsTeam: true,
+        });
+        const loginUrl = `${window.location.origin}/magic-login/${token}`;
+        setTeamLinks((prev) => ({ ...prev, [team.teamId]: loginUrl }));
+      } catch {
+        flashError(`Failed to generate link for ${team.teamName}`);
+      }
+    }
+  }
+
+  async function handleGenerateTeamLink(teamId: string, teamCode: string) {
+    try {
+      const token = await generateLoginToken("team", teamId, {
+        teamCode,
+        targetIsTeam: true,
+      });
+      const loginUrl = `${window.location.origin}/magic-login/${token}`;
+      setTeamLinks((prev) => ({ ...prev, [teamId]: loginUrl }));
+    } catch {
+      flashError("Failed to generate link");
+    }
+  }
+
   async function handleSendTeamLoginLinks() {
+    const recipientCount = teamLinksData.length;
     setConfirmDef({
       title: "Send Login Links",
-      message: `Send magic login emails to all ${linkTeams.length} team participants? Each gets a unique one-click login link.`,
+      message: `Send magic login emails to ${linkToLeadersOnly ? "team leaders" : "teams"} (${recipientCount})? Links will be auto-generated first.`,
     });
     setConfirmHandler(() => async () => {
       setLinkSending(true);
@@ -1502,27 +1576,37 @@ export default function AdminPage() {
       const errors: string[] = [];
       let ok = 0;
 
-      for (const p of linkTeams) {
+      for (const team of teamLinksData) {
+        let loginUrl = teamLinks[team.teamId];
+        if (!loginUrl) {
+          try {
+            const token = await generateLoginToken("team", team.teamId, {
+              teamCode: team.teamCode,
+              targetIsTeam: true,
+            });
+            loginUrl = `${window.location.origin}/magic-login/${token}`;
+            setTeamLinks((prev) => ({ ...prev, [team.teamId]: loginUrl }));
+          } catch (err) {
+            errors.push(`${team.teamName}: ${err instanceof Error ? err.message : "Failed to generate"}`);
+            continue;
+          }
+        }
+
         try {
-          const token = await generateLoginToken("team", p.participantId, {
-            roll: p.roll,
-            teamCode: p.teamCode,
-          });
-          const loginUrl = `${window.location.origin}/magic-login/${token}`;
           await insforge.emails.send({
-            to: p.email,
-            subject: `Log in to Treasure Hunt — ${p.teamName}`,
-            html: magicLoginEmailHtml({ name: p.name, loginUrl, role: "team" }),
+            to: team.leaderEmail,
+            subject: `Log in to Treasure Hunt — ${team.teamName}`,
+            html: magicLoginEmailHtml({ name: team.leaderName, loginUrl, role: "team" }),
           });
           ok++;
         } catch (err) {
-          errors.push(`${p.name} (${p.email}): ${err instanceof Error ? err.message : "Failed"}`);
+          errors.push(`${team.leaderName} (${team.leaderEmail}): ${err instanceof Error ? err.message : "Failed"}`);
         }
       }
 
       setLinkResults({ ok, fail: errors.length, errors });
       setLinkSending(false);
-      flash(`Sent ${ok} of ${linkTeams.length} emails`);
+      flash(`Sent ${ok} emails`);
     });
   }
 
@@ -1550,16 +1634,16 @@ export default function AdminPage() {
   function renderLoginLinks() {
     return (
       <div className="flex flex-col gap-6">
-        {/* Team push email */}
+        {/* Team login links */}
         <div className="card p-8" style={{ background: "var(--surface)", borderTop: "6px solid var(--color-brand-blue)" }}>
           <div className="mb-2 flex items-center gap-3">
-            <span className="text-2xl">🏃</span>
+            <Link2 className="h-5 w-5" style={{ color: "var(--color-brand-blue)" }} />
             <h3 className="text-[15px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-blue)" }}>
               Team Login Links
             </h3>
           </div>
           <p className="mb-6 text-[13px] font-semibold" style={{ color: "var(--fg-muted)" }}>
-            Send one-click login emails to all team participants. Each link is unique, single-use, and expires in 7 days.
+            Generate one-click login links per team. The link logs in as the team leader. Single-use, expires in 7 days.
           </p>
 
           <div className="flex flex-wrap items-center gap-4">
@@ -1569,18 +1653,40 @@ export default function AdminPage() {
               className="btn-press rounded-2xl px-6 py-3 text-[13px] font-black uppercase tracking-wide transition-all"
               style={{ background: "var(--border-soft)", color: "var(--fg-muted)" }}
             >
-              {linkLoading ? "⏳ Loading…" : `🔄 Load Teams (${linkTeams.length || "?"})`}
+              {linkLoading ? "⏳ Loading…" : `🔄 Load Teams (${teamLinksData.length || "?"})`}
             </button>
 
-            {linkTeams.length > 0 && (
-              <button
-                onClick={handleSendTeamLoginLinks}
-                disabled={linkSending}
-                className="btn-press rounded-2xl px-8 py-3 text-[13px] font-black uppercase tracking-wide text-white transition-all"
-                style={{ background: "var(--color-brand-green)", opacity: linkSending ? 0.6 : 1 }}
-              >
-                {linkSending ? "⏳ Sending…" : `📧 Send to ${linkTeams.length}`}
-              </button>
+            {teamLinksData.length > 0 && (
+              <>
+                <button
+                  onClick={handleGenerateAllTeamLinks}
+                  className="btn-press rounded-2xl px-6 py-3 text-[13px] font-black uppercase tracking-wide transition-all"
+                  style={{ background: "var(--color-brand-blue)", color: "#fff" }}
+                >
+                  🔗 Generate All
+                </button>
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={linkToLeadersOnly}
+                    onChange={(e) => setLinkToLeadersOnly(e.target.checked)}
+                    className="h-4 w-4 rounded"
+                  />
+                  <span className="text-[12px] font-extrabold uppercase" style={{ color: "var(--fg-muted)" }}>
+                    Email to leaders
+                  </span>
+                </label>
+
+                <button
+                  onClick={handleSendTeamLoginLinks}
+                  disabled={linkSending}
+                  className="btn-press rounded-2xl px-8 py-3 text-[13px] font-black uppercase tracking-wide text-white transition-all"
+                  style={{ background: "var(--color-brand-green)", opacity: linkSending ? 0.6 : 1 }}
+                >
+                  {linkSending ? "⏳ Sending…" : `📧 Send ${linkToLeadersOnly ? "to Leaders" : "Email"}`}
+                </button>
+              </>
             )}
           </div>
 
@@ -1599,17 +1705,40 @@ export default function AdminPage() {
             </div>
           )}
 
-          {linkTeams.length > 0 && (
-            <div className="mt-6 max-h-48 overflow-y-auto space-y-2">
-              {linkTeams.map((p) => (
-                <div key={p.participantId} className="flex items-center gap-3 rounded-2xl px-4 py-2.5" style={{ background: "var(--border-soft)" }}>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-[14px] font-black truncate" style={{ color: "var(--fg)" }}>{p.name}</span>
-                    <span className="ml-2 text-[11px] font-semibold" style={{ color: "var(--fg-muted)" }}>{p.email}</span>
+          {teamLinksData.length > 0 && (
+            <div className="mt-6 space-y-3">
+              {teamLinksData.map((t) => {
+                const link = teamLinks[t.teamId];
+                return (
+                  <div key={t.teamId} className="flex items-center gap-4 rounded-2xl px-5 py-4" style={{ background: "var(--border-soft)" }}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[15px] font-black" style={{ color: "var(--fg)" }}>{t.teamName}</span>
+                        <span className="text-[11px] font-semibold" style={{ color: "var(--fg-muted)" }}>· leader: {t.leaderName}</span>
+                      </div>
+                      <p className="text-[11px] font-bold opacity-60" style={{ color: "var(--fg-muted)" }}>
+                        {t.leaderEmail}
+                      </p>
+                    </div>
+                    {link ? (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <input readOnly value={link} className="w-48 rounded-xl border-2 px-3 py-2 text-[12px] font-mono font-bold outline-none truncate" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }} onClick={(e) => (e.target as HTMLInputElement).select()} />
+                        <button onClick={() => copyToClipboard(link, t.teamId)}
+                          className="btn-press rounded-xl px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide transition-all"
+                          style={{ background: linkCopiedId === t.teamId ? "var(--color-brand-green)" : "var(--surface)", color: linkCopiedId === t.teamId ? "#fff" : "var(--fg)" }}>
+                          {linkCopiedId === t.teamId ? "✅" : "📋 Copy"}
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => handleGenerateTeamLink(t.teamId, t.teamCode)}
+                        className="btn-press rounded-2xl px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide transition-all shrink-0"
+                        style={{ background: "var(--color-brand-blue)", color: "#fff" }}>
+                        🔗 Generate
+                      </button>
+                    )}
                   </div>
-                  <span className="text-[11px] font-bold shrink-0" style={{ color: "var(--color-brand-blue)" }}>{p.teamName}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

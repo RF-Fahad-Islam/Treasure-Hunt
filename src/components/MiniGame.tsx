@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { fetchMiniGameLeaderboard, submitScore, type MiniGameScore } from "@/services/minigame";
 
 // --- Game Constants ---
 const GRAVITY = 0.6;
@@ -18,6 +19,66 @@ export function MiniGame() {
   const [gameStateUi, setGameStateUi] = useState<"start" | "playing" | "gameover">("start");
   const [scoreUi, setScoreUi] = useState(0);
   const [highScore, setHighScore] = useState(0);
+  const [leaderboard, setLeaderboard] = useState<MiniGameScore[]>([]);
+  const [nickname, setNickname] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+
+  // --- Sound Effects (Web Audio API) ---
+  const audioCtx = useRef<AudioContext | null>(null);
+  
+  const playSound = useCallback((type: "jump" | "collect" | "die" | "bloop") => {
+    if (!audioCtx.current) {
+      audioCtx.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    const ctx = audioCtx.current;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    const now = ctx.currentTime;
+    
+    switch (type) {
+      case "jump":
+        osc.type = "square";
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.exponentialRampToValueAtTime(400, now + 0.1);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.1);
+        break;
+      case "collect":
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(800, now);
+        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+        osc.start(now);
+        osc.stop(now + 0.2);
+        break;
+      case "bloop":
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(100, now);
+        osc.frequency.exponentialRampToValueAtTime(200, now + 0.05);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+        osc.start(now);
+        osc.stop(now + 0.05);
+        break;
+      case "die":
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.linearRampToValueAtTime(50, now + 0.3);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+        break;
+    }
+  }, []);
   
   const keys = useRef<{ [key: string]: boolean }>({});
   const requestRef = useRef<number>(0);
@@ -56,6 +117,13 @@ export function MiniGame() {
     }));
     setGameStateUi("playing");
     setScoreUi(0);
+    setNickname("");
+    setIsSubmitting(false);
+    setHasSubmitted(false);
+  }, []);
+
+  useEffect(() => {
+    fetchMiniGameLeaderboard().then(setLeaderboard);
   }, []);
 
   const spawnObstacle = () => {
@@ -149,6 +217,7 @@ export function MiniGame() {
         if ((keys.current["ArrowUp"] || keys.current["w"] || keys.current[" "] || keys.current["Jump"]) && p.isGrounded && !p.isDucking) {
           p.vy = JUMP_FORCE;
           p.isGrounded = false;
+          playSound("jump");
           // Jump dust
           for(let i=0; i<5; i++) spawnDust(p.x + p.w/2, p.y + p.h);
         }
@@ -215,6 +284,7 @@ export function MiniGame() {
               // Collect treasure
               s.score += 100;
               s.obstacles.splice(i, 1);
+              playSound("collect");
               // Spawn some sparkling particles
               spawnExplosion(obs.x, obs.y);
               continue; // Don't die
@@ -223,12 +293,14 @@ export function MiniGame() {
               if (Math.random() > 0.8) {
                 // Occasional splash effect
                 spawnDust(obs.x + obs.w/2, obs.y + obs.h); 
+                playSound("bloop");
               }
               continue;
             } else {
               // Hit enemy!
               s.state = "gameover";
               setGameStateUi("gameover");
+              playSound("die");
               if (s.score > highScore) setHighScore(Math.floor(s.score));
               s.shake = 15;
               spawnExplosion(p.x, p.y);
@@ -418,69 +490,169 @@ export function MiniGame() {
     window.dispatchEvent(new CustomEvent("open-lookup", { detail: "register" }));
   };
 
+  const handleSubmitScore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nickname.trim() || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await submitScore(nickname, scoreUi);
+      const updated = await fetchMiniGameLeaderboard();
+      setLeaderboard(updated);
+      setNickname("");
+      setIsSubmitting(false);
+      setHasSubmitted(true);
+    } catch (err) {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <section className="relative py-20 px-4 sm:px-8 overflow-hidden select-none bg-[#FAFAFA] dark:bg-[#111]">
-      <div className="max-w-4xl mx-auto text-center mb-10">
-        <h2 className="font-display text-3xl md:text-5xl font-black text-[#2B2B2B] dark:text-white tracking-tight mb-4">
-          Special Event <span className="text-[var(--color-brand-green)]">Reveal!</span>
+    <section className="relative py-10 sm:py-20 px-4 sm:px-8 overflow-hidden select-none bg-[#FAFAFA] dark:bg-[#111]">
+      <div className="max-w-4xl mx-auto text-center mb-6 sm:mb-10">
+        <h2 className="font-display text-3xl md:text-5xl font-black text-[#2B2B2B] dark:text-white tracking-tight mb-2 sm:mb-4">
+          Need a <span className="text-[var(--color-brand-green)]">Break?</span>
         </h2>
-        <p className="text-[#777] dark:text-white/60 font-semibold max-w-xl mx-auto">
-          Warm up with our offline Dino game before the hunt! Use <kbd className="px-2 py-1 bg-black/10 dark:bg-white/10 rounded">SPACE</kbd> or <kbd className="px-2 py-1 bg-black/10 dark:bg-white/10 rounded">UP</kbd> to jump, and <kbd className="px-2 py-1 bg-black/10 dark:bg-white/10 rounded">DOWN</kbd> to survive 🌊 traps as a duck! Collect 📦 for bonus points.
+        <p className="text-[#777] dark:text-white/60 font-semibold max-w-xl mx-auto text-sm sm:text-base">
+          Take a moment to relax. Use <kbd className="px-1.5 py-0.5 bg-black/10 dark:bg-white/10 rounded">SPACE</kbd> to jump, and <kbd className="px-1.5 py-0.5 bg-black/10 dark:bg-white/10 rounded">DOWN</kbd> to survive 🌊!
         </p>
       </div>
 
-      <div className="max-w-4xl mx-auto relative perspective-[1000px]">
-        {/* Game Container */}
-        <div 
-          className="relative bg-white dark:bg-[#1A1A1A] rounded-[32px] p-2 sm:p-4 border-4 border-[var(--border-soft)] shadow-2xl"
-        >
-          <div className="relative w-full aspect-[2.5/1] sm:aspect-[3/1] bg-[#F7F7F7] dark:bg-[#111] rounded-2xl overflow-hidden shadow-inner transition-colors duration-1000">
-            <canvas
-              ref={canvasRef}
-              width={CANVAS_W}
-              height={CANVAS_H}
-              className="w-full h-full object-cover touch-none"
-              style={{ imageRendering: "pixelated" }}
-            />
+      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-8">
+        <div className="lg:col-span-3 relative">
+          {/* Game Container */}
+          <div 
+            className="relative bg-white dark:bg-[#1A1A1A] rounded-[24px] sm:rounded-[32px] p-1.5 sm:p-4 border-2 sm:border-4 border-[var(--border-soft)] shadow-xl"
+          >
+            <div className="relative w-full aspect-[2/1] sm:aspect-[3/1] bg-[#F7F7F7] dark:bg-[#111] rounded-xl sm:rounded-2xl overflow-hidden shadow-inner transition-colors duration-1000">
+              <canvas
+                ref={canvasRef}
+                width={CANVAS_W}
+                height={CANVAS_H}
+                className="w-full h-full object-contain touch-none bg-[#F7F7F7] dark:bg-[#111]"
+                style={{ imageRendering: "pixelated" }}
+              />
 
-            {/* CTA Overlay when Game Over */}
-            <AnimatePresence>
-              {gameStateUi === "gameover" && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="absolute bottom-6 left-0 right-0 flex justify-center z-30"
-                >
-                  <button
-                    onClick={handleRegisterClick}
-                    className="btn-press ripple btn-primary px-8 py-3 shadow-[0_8px_0_#43A047]"
+              {/* Game Over UI */}
+              <AnimatePresence>
+                {gameStateUi === "gameover" && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm p-4"
                   >
-                    Register Team Now!
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                    {!hasSubmitted ? (
+                      <form onSubmit={handleSubmitScore} className="bg-white dark:bg-[#2A2A2A] p-5 sm:p-6 rounded-2xl shadow-xl w-full max-w-[280px] sm:max-w-xs text-center">
+                        <h3 className="text-lg sm:text-xl font-bold mb-2 sm:mb-4 dark:text-white">Save your Score!</h3>
+                        <p className="text-xl sm:text-2xl font-black text-[var(--color-brand-green)] mb-3 sm:mb-4">{scoreUi}</p>
+                        <input
+                          autoFocus
+                          type="text"
+                          placeholder="Nickname"
+                          value={nickname}
+                          onChange={(e) => setNickname(e.target.value)}
+                          className="w-full px-4 py-2 rounded-xl bg-[#F0F0F0] dark:bg-[#111] dark:text-white mb-3 sm:mb-4 text-center focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-green)]"
+                          maxLength={15}
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={resetGame}
+                            className="flex-1 px-3 py-2 bg-gray-200 dark:bg-white/10 dark:text-white rounded-xl font-bold text-sm"
+                          >
+                            Skip
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="flex-1 px-3 py-2 bg-[var(--color-brand-green)] text-white rounded-xl font-bold text-sm disabled:opacity-50"
+                          >
+                            {isSubmitting ? "..." : "Save"}
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="text-center">
+                        <button
+                          onClick={resetGame}
+                          className="btn-press ripple btn-primary px-6 sm:px-8 py-2.5 sm:py-3 shadow-[0_6px_0_#43A047] sm:shadow-[0_8px_0_#43A047] mb-4 text-sm sm:text-base"
+                        >
+                          Restart Game
+                        </button>
+                        <br />
+                        <button
+                          onClick={handleRegisterClick}
+                          className="text-white/80 underline font-semibold text-sm"
+                        >
+                          Register Team Now!
+                        </button>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+          
+          {/* Mobile Controls */}
+          <div className="mt-4 sm:hidden flex justify-between items-center px-2 touch-none" onContextMenu={e => e.preventDefault()}>
+            <button 
+              onPointerDown={() => handlePointerDown("ArrowDown")}
+              onPointerUp={() => handlePointerUp("ArrowDown")}
+              onPointerCancel={() => handlePointerUp("ArrowDown")}
+              className="group relative w-20 h-20 bg-white dark:bg-[#2A2A2A] border-b-4 border-[#E5E5E5] dark:border-[#111] rounded-3xl flex flex-col items-center justify-center active:translate-y-1 active:border-b-0 shadow-md transition-all"
+            >
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="dark:text-white text-[#555]"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+              <span className="text-[10px] font-black dark:text-white/40 text-black/40 uppercase mt-1">Duck</span>
+            </button>
+            <button 
+              onPointerDown={() => handlePointerDown("Jump")}
+              onPointerUp={() => handlePointerUp("Jump")}
+              onPointerCancel={() => handlePointerUp("Jump")}
+              className="w-24 h-24 bg-[var(--color-brand-green)] border-b-4 border-[#3A8400] rounded-full flex items-center justify-center active:translate-y-1 active:border-b-0 shadow-lg text-white font-black text-xl tracking-tighter"
+            >
+              JUMP
+            </button>
           </div>
         </div>
 
-        {/* Mobile Controls */}
-        <div className="mt-6 flex justify-between items-center px-4 sm:hidden touch-none" onContextMenu={e => e.preventDefault()}>
-          <button 
-            onPointerDown={() => handlePointerDown("ArrowDown")}
-            onPointerUp={() => handlePointerUp("ArrowDown")}
-            onPointerCancel={() => handlePointerUp("ArrowDown")}
-            className="w-20 h-20 bg-white dark:bg-[#2A2A2A] border-b-4 border-[#E5E5E5] dark:border-[#111] rounded-3xl flex items-center justify-center active:translate-y-1 active:border-b-0 shadow-md"
-          >
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="dark:text-white text-[#555]"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
-          </button>
-          <button 
-            onPointerDown={() => handlePointerDown("Jump")}
-            onPointerUp={() => handlePointerUp("Jump")}
-            onPointerCancel={() => handlePointerUp("Jump")}
-            className="w-24 h-24 bg-[var(--color-brand-green)] border-b-4 border-[#3A8400] rounded-full flex items-center justify-center active:translate-y-1 active:border-b-0 shadow-lg text-white font-black text-2xl"
-          >
-            JUMP
-          </button>
+        {/* Leaderboard Panel */}
+        <div className="lg:col-span-1 mt-4 lg:mt-0">
+          <div className="bg-white dark:bg-[#1A1A1A] rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 border-2 sm:border-4 border-[var(--border-soft)] shadow-xl h-full flex flex-col">
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <h3 className="font-display text-lg sm:text-xl font-black dark:text-white">Leaderboard</h3>
+              <span className="text-[10px] font-bold text-[var(--color-brand-green)] bg-[var(--color-brand-green)]/10 px-2 py-0.5 rounded">GLOBAL</span>
+            </div>
+            
+            <div className="flex-1 space-y-2 sm:space-y-3 overflow-y-auto pr-1 max-h-[300px] lg:max-h-none">
+              {leaderboard.length > 0 ? (
+                leaderboard.map((entry, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2.5 sm:p-3 bg-[#F7F7F7] dark:bg-[#111] rounded-xl sm:rounded-2xl border border-transparent hover:border-[var(--color-brand-green)] transition-all text-sm sm:text-base">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <span className={`w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full text-[10px] sm:text-xs font-bold ${
+                        idx === 0 ? "bg-yellow-400 text-white" : 
+                        idx === 1 ? "bg-gray-300 text-white" : 
+                        idx === 2 ? "bg-orange-400 text-white" : 
+                        "text-gray-400"
+                      }`}>
+                        {idx + 1}
+                      </span>
+                      <span className="font-bold dark:text-white truncate max-w-[80px] sm:max-w-[100px]">{entry.nickname}</span>
+                    </div>
+                    <span className="font-mono font-black text-[var(--color-brand-green)]">{Math.floor(entry.score)}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-10 text-gray-400 italic text-sm">No scores yet...</div>
+              )}
+            </div>
+
+            <button 
+              onClick={handleRegisterClick}
+              className="mt-4 sm:mt-6 w-full py-2.5 sm:py-3 bg-black dark:bg-white dark:text-black text-white rounded-xl sm:rounded-2xl font-black text-xs sm:text-sm uppercase tracking-wider"
+            >
+              Join the Hunt
+            </button>
+          </div>
         </div>
       </div>
     </section>

@@ -1,6 +1,14 @@
 import { insforge } from "@/lib/insforge";
 import type { Team, TeamRoute, Spot, ClueDefinition, EventConfig, Participant } from "@/types";
 
+export interface TeamLobbyEntry {
+  teamId: string;
+  teamName: string;
+  teamCode: string;
+  avatarSeed: string;
+  memberCount: number;
+}
+
 /* ─── Types ──────────────────────────────────────────────────── */
 
 export interface DashboardData {
@@ -170,4 +178,52 @@ export async function updateMyAvatar(
     .eq("id", participantId);
 
   if (error) throw new Error(error.message);
+}
+
+/* ─── Team name / avatar seed (leader only) ────────────────── */
+
+export async function updateTeamName(teamId: string, name: string): Promise<void> {
+  const { error } = await insforge.database
+    .from("teams")
+    .update({ name })
+    .eq("id", teamId);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function updateTeamAvatarSeed(teamId: string, avatarSeed: string): Promise<void> {
+  const { error } = await insforge.database
+    .from("teams")
+    .update({ avatar_seed: avatarSeed })
+    .eq("id", teamId);
+
+  if (error) throw new Error(error.message);
+}
+
+/* ─── Fetch all teams for lobby (leader other-teams view) ─── */
+
+export async function fetchAllTeamsForLobby(): Promise<TeamLobbyEntry[]> {
+  const [teamsRes, participantsRes] = await Promise.all([
+    insforge.database.from("teams").select("id, name, team_code, avatar_seed"),
+    insforge.database.from("participants").select("team_id"),
+  ]);
+
+  if (teamsRes.error) throw new Error(teamsRes.error.message);
+  if (participantsRes.error) throw new Error(participantsRes.error.message);
+
+  const teams = (teamsRes.data ?? []) as any[];
+  const members = (participantsRes.data ?? []) as any[];
+
+  const countMap = new Map<string, number>();
+  for (const m of members) {
+    if (m.team_id) countMap.set(m.team_id, (countMap.get(m.team_id) ?? 0) + 1);
+  }
+
+  return teams.map((t) => ({
+    teamId: t.id,
+    teamName: t.name,
+    teamCode: t.team_code,
+    avatarSeed: t.avatar_seed || t.name,
+    memberCount: countMap.get(t.id) ?? 0,
+  }));
 }

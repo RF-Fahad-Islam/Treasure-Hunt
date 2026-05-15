@@ -254,13 +254,13 @@ export default function SpotLeaderPage() {
         )}
 
         <Reveal delay={0.08} duration={0.55}>
-          <div className="card border-t-[8px] mb-8 p-10" style={{ background: "var(--surface)", borderColor: "var(--color-brand-blue)" }}>
-            <div className="flex items-center justify-between gap-4">
+          <div className="card border-t-[8px] mb-8 p-6 sm:p-10" style={{ background: "var(--surface)", borderColor: "var(--color-brand-blue)" }}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <p className="text-[14px] font-black uppercase tracking-[0.18em]" style={{ color: "var(--fg-muted)" }}>
+                <p className="text-[12px] sm:text-[14px] font-black uppercase tracking-[0.18em]" style={{ color: "var(--fg-muted)" }}>
                   🏠 Your Spot
                 </p>
-                <p className="mt-2 text-[19px] font-black leading-relaxed" style={{ color: "var(--fg)" }}>
+                <p className="mt-2 text-[16px] sm:text-[19px] font-black leading-relaxed" style={{ color: "var(--fg)" }}>
                   {data?.spot.description ?? "Loading…"}
                 </p>
               </div>
@@ -268,7 +268,7 @@ export default function SpotLeaderPage() {
                 data-sound="heavy"
                 onClick={load}
                 disabled={loading}
-                className="btn-press ripple rounded-[20px] px-8 py-4 text-[15px] font-black uppercase tracking-wide"
+                className="btn-press ripple w-full sm:w-auto rounded-[20px] px-6 sm:px-8 py-3 sm:py-4 text-[14px] sm:text-[15px] font-black uppercase tracking-wide"
                 style={{
                   background: "var(--surface)",
                   border: "3px solid var(--border-soft)",
@@ -349,7 +349,7 @@ export default function SpotLeaderPage() {
               >
                 <Reveal>
                   <div
-                    className="card border-t-[8px] p-10 transition-all touch-press ripple"
+                    className="card border-t-[8px] p-6 sm:p-10 transition-all touch-press ripple"
                     style={{
                       background: successId === team.teamId
                         ? "linear-gradient(135deg, rgba(88,204,2,0.08), rgba(88,204,2,0.02))"
@@ -359,41 +359,43 @@ export default function SpotLeaderPage() {
                         : "var(--color-brand-gold)",
                     }}
                   >
-                    <div className="flex items-start justify-between gap-6">
+                    <div className="flex flex-col sm:flex-row items-start justify-between gap-6">
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-3">
-                          <span className="text-[26px] font-black truncate" style={{ color: "var(--fg)" }}>
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                          <span className="text-[20px] sm:text-[26px] font-black truncate" style={{ color: "var(--fg)" }}>
                             {team.teamName}
                           </span>
-                          <span
-                            className="rounded-xl px-4 py-1.5 text-[12px] font-black uppercase tracking-wide"
-                            style={{
-                              background:
-                                team.status === "active"
-                                  ? "rgba(88,204,2,0.15)"
-                                  : "rgba(255,200,0,0.15)",
-                              color:
-                                team.status === "active"
-                                  ? "var(--color-brand-green)"
-                                  : "var(--color-brand-gold)",
-                            }}
-                          >
-                            {team.status === "active" ? "🟡 Active" : "🟡 Pending"}
-                          </span>
-                          {(() => {
-                            const loc = teamLocations.find(t => t.id === team.teamId);
-                            return loc ? (
-                              <span
-                                className="rounded-xl px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide"
-                                style={{
-                                  background: loc.isActive ? "rgba(88,204,2,0.15)" : "rgba(156,163,175,0.15)",
-                                  color: loc.isActive ? "var(--color-brand-green)" : "var(--fg-muted)",
-                                }}
-                              >
-                                {loc.isActive ? "🟢 Live" : "⚪ Offline"}
-                              </span>
-                            ) : null;
-                          })()}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className="rounded-xl px-3 sm:px-4 py-1 sm:py-1.5 text-[10px] sm:text-[12px] font-black uppercase tracking-wide"
+                              style={{
+                                background:
+                                  team.status === "active"
+                                    ? "rgba(88,204,2,0.15)"
+                                    : "rgba(255,200,0,0.15)",
+                                color:
+                                  team.status === "active"
+                                    ? "var(--color-brand-green)"
+                                    : "var(--color-brand-gold)",
+                              }}
+                            >
+                              {team.status === "active" ? "🟡 Active" : "🟡 Pending"}
+                            </span>
+                            {(() => {
+                              const loc = teamLocations.find(t => t.id === team.teamId);
+                              return loc ? (
+                                <span
+                                  className="rounded-xl px-2 sm:px-3 py-1 text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wide"
+                                  style={{
+                                    background: loc.isActive ? "rgba(88,204,2,0.15)" : "rgba(156,163,175,0.15)",
+                                    color: loc.isActive ? "var(--color-brand-green)" : "var(--fg-muted)",
+                                  }}
+                                >
+                                  {loc.isActive ? "🟢 Live" : "⚪ Offline"}
+                                </span>
+                              ) : null;
+                            })()}
+                          </div>
                         </div>
 
                         <p className="mt-3 text-[15px] font-semibold leading-relaxed" style={{ color: "var(--fg-muted)" }}>
@@ -419,14 +421,14 @@ export default function SpotLeaderPage() {
                                     style={{
                                       background: step.isCurrent 
                                         ? "var(--color-brand-blue)" 
-                                        : step.status === "solved" 
+                                        : step.status === "completed" || step.status === "solved" 
                                           ? "var(--color-brand-green)" 
                                           : "var(--border-soft)",
-                                      color: step.isCurrent || step.status === "solved" ? "#fff" : "var(--fg-muted)",
+                                      color: step.isCurrent || step.status === "completed" || step.status === "solved" ? "#fff" : "var(--fg-muted)",
                                       opacity: step.status === "pending" && !step.isCurrent ? 0.6 : 1,
                                     }}
                                   >
-                                    {step.isCurrent ? "📍 " : step.status === "solved" ? "✓ " : "⏳ "}{step.spotName}
+                                    {step.isCurrent ? "📍 " : step.status === "completed" || step.status === "solved" ? "✓ " : "⏳ "}{step.spotName}
                                   </span>
                                   {idx < team.fullRoute.length - 1 && (
                                     <span className="text-[var(--fg-muted)] opacity-50 font-bold">→</span>
@@ -443,7 +445,7 @@ export default function SpotLeaderPage() {
                         whileTap={{ scale: 0.92 }}
                         onClick={() => openMiniGame(team)}
                         disabled={successId === team.teamId}
-                        className="btn-press ripple shrink-0 rounded-[24px] px-10 py-6 text-[17px] font-black uppercase tracking-wide text-white transition-all"
+                        className="btn-press ripple w-full sm:w-auto shrink-0 rounded-[20px] sm:rounded-[24px] px-8 sm:px-10 py-4 sm:py-6 text-[15px] sm:text-[17px] font-black uppercase tracking-wide text-white transition-all"
                         style={{
                           background:
                             successId === team.teamId

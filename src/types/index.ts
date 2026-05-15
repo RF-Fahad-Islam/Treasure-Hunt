@@ -13,6 +13,7 @@ export interface Team {
   id: string;
   name: string;
   team_code: string;
+  avatar_seed: string | null;
   total_points: number | null;
   total_penalty_seconds: number | null;
   total_solve_time_seconds: number | null;

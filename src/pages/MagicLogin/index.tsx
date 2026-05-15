@@ -8,6 +8,20 @@ import { useAuthStore } from "@/store/authStore";
 
 type Status = "loading" | "invalid" | "expired" | "success" | "error";
 
+async function loginByTeamId(teamId: string, teamCode: string) {
+  const { data: participants, error } = await insforge.database
+    .from("participants")
+    .select("id, name, roll, is_leader")
+    .eq("team_id", teamId)
+    .order("is_leader", { ascending: false });
+
+  if (error || !participants || participants.length === 0)
+    throw new Error("Team not found");
+
+  const leader = participants.find((p: any) => p.is_leader) ?? participants[0] as any;
+  return loginByRoll(leader.roll ?? "", teamCode);
+}
+
 export default function MagicLoginPage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
@@ -33,18 +47,27 @@ export default function MagicLoginPage() {
         const { targetRole, targetId, metadata } = result;
 
         if (targetRole === "team") {
-          const roll = metadata?.roll as string | undefined;
+          const targetIsTeam = metadata?.targetIsTeam === true;
           const teamCode = metadata?.teamCode as string | undefined;
 
-          if (roll && teamCode) {
-            const session = await loginByRoll(roll, teamCode);
+          if (targetIsTeam && teamCode) {
+            const session = await loginByTeamId(targetId, teamCode);
             setSession(session);
             setStatus("success");
             setMsg("Logged in! Redirecting…");
             setTimeout(() => navigate("/team", { replace: true }), 800);
           } else {
-            setStatus("error");
-            setMsg("Incomplete login data. Please log in manually.");
+            const roll = metadata?.roll as string | undefined;
+            if (roll && teamCode) {
+              const session = await loginByRoll(roll, teamCode);
+              setSession(session);
+              setStatus("success");
+              setMsg("Logged in! Redirecting…");
+              setTimeout(() => navigate("/team", { replace: true }), 800);
+            } else {
+              setStatus("error");
+              setMsg("Incomplete login data. Please log in manually.");
+            }
           }
         } else if (targetRole === "spot-leader") {
           const { data: spots } = await insforge.database

@@ -179,10 +179,10 @@ export function SuccessOverlay({
                 stiffness: 200,
                 damping: 16,
               }}
-              className="font-display text-[64px] font-black leading-none tracking-tight text-[#58CC02] sm:text-[72px] dark:gradient-text"
+              className="w-full px-2 font-display text-[42px] font-black leading-none tracking-tight text-[#58CC02] sm:text-[54px] dark:gradient-text break-words"
               style={{
                 textShadow:
-                  "var(--nice-shadow, 0 4px 0 rgba(58, 132, 0, 0.18))",
+                  "var(--nice-shadow, 0 4px 0 rgba(58, 132, 0, 0.12))",
               }}
             >
               {title}
@@ -193,7 +193,7 @@ export function SuccessOverlay({
               initial={{ y: 16, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.35, duration: 0.45, ease }}
-              className="-mt-2 text-[15px] font-bold text-[#777] dark:text-white/60"
+              className="-mt-2 text-[16px] font-bold text-[#777] dark:text-white/60 px-4"
             >
               {subtitle}
             </motion.p>
