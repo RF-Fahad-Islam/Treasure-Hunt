@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Reveal } from "@/components/Reveal";
 import { SuccessOverlay } from "@/components/SuccessOverlay";
 import { ExpiredOverlay } from "@/components/ExpiredOverlay";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PointsToast } from "@/components/PointsToast";
 import { LeaderboardOverlay } from "@/components/leaderboard/LeaderboardOverlay";
 import { BroadcastBanner } from "@/components/BroadcastBanner";
@@ -82,6 +83,7 @@ export default function TeamDashboardPage() {
   const [showNameEdit, setShowNameEdit] = useState(false);
   const [showTimeout, setShowTimeout] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showConfirmReveal, setShowConfirmReveal] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const prevCompletedRef = useRef(0);
   const prevPointsRef = useRef(0);
@@ -154,6 +156,7 @@ export default function TeamDashboardPage() {
     if (!data?.currentRoute || !teamId) return;
     try {
       await revealAnswer(data.currentRoute.id, teamId);
+      setShowConfirmReveal(false);
       setShowTimeout(false);
       await load();
     } catch (err) {
@@ -227,7 +230,21 @@ export default function TeamDashboardPage() {
     <div className="relative min-h-screen overflow-hidden pb-28" style={{ background: "#F7F7F7", paddingBottom: "calc(7rem + env(safe-area-inset-bottom, 0px))" }}>
 
       <SuccessOverlay open={showSuccess} onClose={() => setShowSuccess(false)} pointsEarned={successPoints} newRank={successRank} />
-      <ExpiredOverlay open={showTimeout} onContinue={handleReveal} autoContinueSec={5} />
+      <ExpiredOverlay 
+        open={showTimeout} 
+        onContinue={() => setShowTimeout(false)} 
+        onReveal={() => setShowConfirmReveal(true)} 
+      />
+      <ConfirmDialog
+        open={showConfirmReveal}
+        title="Reveal Spot Location?"
+        message="If you reveal the spot location now, you will receive +0 bonus points for this clue. You will still incur any accrued time penalties. Continue?"
+        confirmLabel="Reveal Spot"
+        cancelLabel="Keep Finding"
+        destructive={true}
+        onConfirm={handleReveal}
+        onCancel={() => setShowConfirmReveal(false)}
+      />
       <BroadcastBanner broadcast={broadcast} />
 
       <LeaderboardOverlay
