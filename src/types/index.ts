@@ -44,6 +44,7 @@ export interface Spot {
   description: string | null;
   location_hint: string | null;
   spot_leader_code: string;
+  login_link_url: string | null;
   has_mini_game: boolean | null;
   mini_game_description: string | null;
   latitude: number | null;

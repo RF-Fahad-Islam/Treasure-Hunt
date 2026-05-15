@@ -316,13 +316,11 @@ export async function createClue(data: {
   spot_id: string;
   clue_text: string;
   image_url?: string;
-  difficulty?: string;
 }): Promise<void> {
   const { error } = await insforge.database.from("clues").insert([{
     spot_id: data.spot_id,
     clue_text: data.clue_text,
     image_url: data.image_url ?? null,
-    difficulty: data.difficulty ?? "medium",
   }]);
   if (error) throw new Error(`Failed to create clue: ${error.message}`);
 }

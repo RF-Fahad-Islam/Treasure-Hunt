@@ -19,7 +19,7 @@ export function BottomCTA() {
           <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-transparent via-white/5 to-transparent" />
 
           <h2 className="font-display text-3xl md:text-5xl font-black text-white mb-6 tracking-tight">
-            Ready to make <span className="text-[var(--color-brand-green)]">History?</span>
+            Ready to embark on <span className="text-[var(--color-brand-green)]">a Journey?</span>
           </h2>
 
           <p className="text-[#888] font-bold text-lg mb-10 max-w-2xl mx-auto">

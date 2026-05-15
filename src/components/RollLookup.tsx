@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useAuthStore } from "@/store/authStore";
 import { lookupByRoll, loginByRoll } from "@/services/auth";
 import { insforge } from "@/lib/insforge";
-import { welcomeEmailHtml } from "@/email-templates/welcome";
+import { sendWelcomeEmail } from "@/lib/email";
 
 interface Props {
   open: boolean;
@@ -538,12 +538,8 @@ function RegisterForm({
         throw dbError;
       }
 
-      const { error: emailErr } = await insforge.emails.send({
-        to: email.trim(),
-        subject: "Welcome to Treasure Hunt 2026!",
-        html: welcomeEmailHtml({ name: name.trim(), roll: roll.trim() }),
-      });
-      if (emailErr) console.error("Welcome email failed:", emailErr.message);
+      const emailErr = await sendWelcomeEmail(name.trim(), email.trim(), roll.trim());
+      if (emailErr) console.error("Welcome email failed:", emailErr);
 
       onSuccess();
     } catch (err: any) {

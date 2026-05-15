@@ -38,7 +38,7 @@ import {
 import { fetchActiveSessions, adminDeactivateSession, generateLoginToken } from "@/services/auth";
 import type { SessionWithUser } from "@/services/auth";
 import type { Participant, Spot, ClueDefinition, EventConfig, Team, Registration } from "@/types";
-import { magicLoginEmailHtml } from "@/email-templates/magic-login";
+
 import type { GeneratedTeam, TeamWithRoute } from "@/services/admin";
 
 import { insforge } from "@/lib/insforge";
@@ -47,6 +47,8 @@ import { SpotMapPicker } from "@/components/SpotMapPicker";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useTeamLocationsRealtime } from "@/hooks/useTeamLocationsRealtime";
 import { disqualifyTeam, reinstateTeam, isActive } from "@/services/location";
+import { sendLoginEmail } from "@/lib/email";
+import { uploadClueImage } from "@/lib/storage";
 import {
   LayoutDashboard, Users, Building2, MapPin, Search,
   Settings, LogIn, Radio, ClipboardList, Link2, Globe,
@@ -169,9 +171,10 @@ export default function AdminPage() {
   const [linkSending, setLinkSending] = useState(false);
   const [linkResults, setLinkResults] = useState<{ ok: number; fail: number; errors: string[] } | null>(null);
   const [linkCopiedId, setLinkCopiedId] = useState<string | null>(null);
-  const [linkToLeadersOnly, setLinkToLeadersOnly] = useState(true);
   const [spotLinks, setSpotLinks] = useState<{ id: string; name: string; url: string }[]>([]);
   const [spotLinkLoading, setSpotLinkLoading] = useState<string | null>(null);
+  const [sendingTeamId, setSendingTeamId] = useState<string | null>(null);
+  const [emailedTeamIds, setEmailedTeamIds] = useState<Set<string>>(new Set());
 
   /* ─── UI ─── */
   const [loading, setLoading] = useState(false);
@@ -180,7 +183,9 @@ export default function AdminPage() {
   const [confirmDef, setConfirmDef] = useState<{ title: string; message: string; destructive?: boolean } | null>(null);
   const [confirmHandler, setConfirmHandler] = useState<(() => Promise<void>) | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
-  const [newClue, setNewClue] = useState({ spot_id: "", clue_text: "", difficulty: "medium", image_url: "" });
+  const [newClue, setNewClue] = useState({ spot_id: "", clue_text: "", image_url: "" });
+  const [clueImageUploading, setClueImageUploading] = useState(false);
+  const [clueImagePreview, setClueImagePreview] = useState<string | null>(null);
   const [filterSpot, setFilterSpot] = useState("");
 
   const loadData = useCallback(async () => {
@@ -196,6 +201,7 @@ export default function AdminPage() {
       ]);
       setParticipants(p);
       setSpots(s);
+      setSpotLinks(s.filter((sp: any) => sp.login_link_url).map((sp: any) => ({ id: sp.id, name: sp.name, url: sp.login_link_url })));
       setClues(c);
       setTeams(t);
       setEventConfig(e);
@@ -999,9 +1005,27 @@ export default function AdminPage() {
     try {
       await createClue(newClue);
       flash("🔎 Clue created!");
-      setNewClue({ spot_id: "", clue_text: "", difficulty: "medium", image_url: "" });
+      setNewClue({ spot_id: "", clue_text: "", image_url: "" });
+      setClueImagePreview(null);
       await loadData();
     } catch (err) { flashError("Create failed"); }
+  }
+
+  async function handleClueFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setClueImageUploading(true);
+    try {
+      const url = await uploadClueImage(file, newClue.clue_text || "clue");
+      setNewClue((p) => ({ ...p, image_url: url }));
+      const reader = new FileReader();
+      reader.onload = () => setClueImagePreview(reader.result as string);
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      flashError(err.message || "Upload failed");
+    } finally {
+      setClueImageUploading(false);
+    }
   }
 
   async function handleDeleteClue(id: string) {
@@ -1023,26 +1047,39 @@ export default function AdminPage() {
         <div className="card p-8" style={{ background: "var(--surface)" }}>
           <h3 className="mb-6 text-[15px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-gold)" }}>🔎 Create New Clue</h3>
           <form onSubmit={handleCreateClue} className="flex flex-col gap-6">
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Select Spot *">
-                <select value={newClue.spot_id} onChange={e => setNewClue(p => ({ ...p, spot_id: e.target.value }))} required className="w-full rounded-[24px] border-4 px-6 py-4 text-[17px] font-black outline-none appearance-none" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }}>
-                  <option value="">Choose a location…</option>
-                  {spots.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </Field>
-              <Field label="Difficulty Level">
-                <select value={newClue.difficulty} onChange={e => setNewClue(p => ({ ...p, difficulty: e.target.value }))} className="w-full rounded-[24px] border-4 px-6 py-4 text-[17px] font-black outline-none appearance-none" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }}>
-                  <option value="easy">🌱 Easy</option>
-                  <option value="medium">⭐ Medium</option>
-                  <option value="hard">🔥 Hard</option>
-                </select>
-              </Field>
-            </div>
+            <Field label="Select Spot *">
+              <select value={newClue.spot_id} onChange={e => setNewClue(p => ({ ...p, spot_id: e.target.value }))} required className="w-full rounded-[24px] border-4 px-6 py-4 text-[17px] font-black outline-none appearance-none" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }}>
+                <option value="">Choose a location…</option>
+                {spots.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </Field>
             <Field label="Clue Riddle *">
               <textarea value={newClue.clue_text} onChange={e => setNewClue(p => ({ ...p, clue_text: e.target.value }))} placeholder="Describe the location without naming it…" rows={3} className="w-full rounded-[24px] border-4 px-6 py-4 text-[18px] font-black outline-none" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }} />
             </Field>
-            <Field label="Reference Image URL (optional)">
-              <input value={newClue.image_url} onChange={e => setNewClue(p => ({ ...p, image_url: e.target.value }))} placeholder="https://example.com/photo.jpg" className="w-full rounded-[24px] border-4 px-6 py-4 text-[17px] font-black outline-none" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }} />
+            <Field label="Clue Image">
+              <div className="flex flex-col gap-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <div className="rounded-[20px] px-6 py-4 text-[15px] font-black uppercase tracking-wide text-white transition-all"
+                    style={{ background: clueImageUploading ? "#999" : "#1CB0F6", boxShadow: "0 4px 0 #0f4a9e" }}>
+                    {clueImageUploading ? "⏳ Uploading…" : "📁 Choose Image"}
+                  </div>
+                  <input type="file" accept="image/*" onChange={handleClueFileUpload} disabled={clueImageUploading} className="hidden" />
+                  <span className="text-[13px] font-semibold" style={{ color: "var(--fg-muted)" }}>or paste URL</span>
+                </label>
+                <input value={newClue.image_url} onChange={e => setNewClue(p => ({ ...p, image_url: e.target.value }))} placeholder="https://example.com/photo.jpg" className="w-full rounded-[24px] border-4 px-6 py-4 text-[17px] font-black outline-none" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }} />
+                {(clueImagePreview || newClue.image_url) && (
+                  <div className="relative rounded-[20px] overflow-hidden border-2" style={{ borderColor: "var(--border-soft)" }}>
+                    <img src={clueImagePreview || newClue.image_url} alt="Preview" className="w-full object-cover" style={{ maxHeight: 200 }} />
+                    {(clueImagePreview || newClue.image_url) && (
+                      <button onClick={() => { setNewClue(p => ({ ...p, image_url: "" })); setClueImagePreview(null); }}
+                        className="absolute top-2 right-2 rounded-full w-8 h-8 flex items-center justify-center text-white font-bold text-sm"
+                        style={{ background: "rgba(0,0,0,0.6)" }}>
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </Field>
             <button data-sound="confirm" type="submit" className="btn-press ripple btn-primary w-full py-5 text-[18px] rounded-[24px] shadow-[0_8px_0_0_var(--color-brand-blue-dark)]">➕ Create Clue</button>
           </form>
@@ -1064,7 +1101,6 @@ export default function AdminPage() {
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 flex-wrap">
                       <span className="rounded-2xl px-4 py-1.5 text-[12px] font-black uppercase tracking-widest" style={{ background: "rgba(28,176,246,0.15)", color: "var(--color-brand-blue)" }}>{spot?.name ?? "Unknown Spot"}</span>
-                      <span className="rounded-2xl px-4 py-1.5 text-[15px] font-black shadow-sm" style={{ background: "var(--surface)", border: "2px solid var(--border-soft)" }}>{c.difficulty === "hard" ? "🔥" : c.difficulty === "easy" ? "🌱" : "⭐"}</span>
                     </div>
                     <button onClick={() => handleDeleteClue(c.id)} className="btn-press ripple rounded-2xl bg-white/10 p-4 text-[20px] border-2 border-transparent hover:border-red-400" title="Delete Clue">🗑</button>
                   </div>
@@ -1551,24 +1587,11 @@ export default function AdminPage() {
     }
   }
 
-  async function handleGenerateTeamLink(teamId: string, teamCode: string) {
-    try {
-      const token = await generateLoginToken("team", teamId, {
-        teamCode,
-        targetIsTeam: true,
-      });
-      const loginUrl = `${window.location.origin}/magic-login/${token}`;
-      setTeamLinks((prev) => ({ ...prev, [teamId]: loginUrl }));
-    } catch {
-      flashError("Failed to generate link");
-    }
-  }
-
   async function handleSendTeamLoginLinks() {
     const recipientCount = teamLinksData.length;
     setConfirmDef({
       title: "Send Login Links",
-      message: `Send magic login emails to ${linkToLeadersOnly ? "team leaders" : "teams"} (${recipientCount})? Links will be auto-generated first.`,
+      message: `Send magic login emails to team leaders (${recipientCount})? Links will be auto-generated first.`,
     });
     setConfirmHandler(() => async () => {
       setLinkSending(true);
@@ -1592,15 +1615,11 @@ export default function AdminPage() {
           }
         }
 
-        try {
-          await insforge.emails.send({
-            to: team.leaderEmail,
-            subject: `Log in to Treasure Hunt — ${team.teamName}`,
-            html: magicLoginEmailHtml({ name: team.leaderName, loginUrl, role: "team" }),
-          });
+        const emailErr = await sendLoginEmail(team.leaderName, team.leaderEmail, team.teamName, team.teamCode, loginUrl);
+        if (emailErr) {
+          errors.push(`${team.leaderName} (${team.leaderEmail}): ${emailErr}`);
+        } else {
           ok++;
-        } catch (err) {
-          errors.push(`${team.leaderName} (${team.leaderEmail}): ${err instanceof Error ? err.message : "Failed"}`);
         }
       }
 
@@ -1617,6 +1636,7 @@ export default function AdminPage() {
       const url = `${window.location.origin}/magic-login/${token}`;
       const existing = spotLinks.filter((s) => s.id !== spotId);
       setSpotLinks([...existing, { id: spotId, name: spotName, url }]);
+      await updateSpot(spotId, { login_link_url: url });
     } catch {
       flashError("Failed to generate link");
     } finally {
@@ -1666,25 +1686,13 @@ export default function AdminPage() {
                   🔗 Generate All
                 </button>
 
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={linkToLeadersOnly}
-                    onChange={(e) => setLinkToLeadersOnly(e.target.checked)}
-                    className="h-4 w-4 rounded"
-                  />
-                  <span className="text-[12px] font-extrabold uppercase" style={{ color: "var(--fg-muted)" }}>
-                    Email to leaders
-                  </span>
-                </label>
-
                 <button
                   onClick={handleSendTeamLoginLinks}
                   disabled={linkSending}
                   className="btn-press rounded-2xl px-8 py-3 text-[13px] font-black uppercase tracking-wide text-white transition-all"
                   style={{ background: "var(--color-brand-green)", opacity: linkSending ? 0.6 : 1 }}
                 >
-                  {linkSending ? "⏳ Sending…" : `📧 Send ${linkToLeadersOnly ? "to Leaders" : "Email"}`}
+                  {linkSending ? "⏳ Sending…" : "📧 Email All"}
                 </button>
               </>
             )}
@@ -1709,33 +1717,110 @@ export default function AdminPage() {
             <div className="mt-6 space-y-3">
               {teamLinksData.map((t) => {
                 const link = teamLinks[t.teamId];
+                const isCopied = linkCopiedId === t.teamId;
+                const isSending = sendingTeamId === t.teamId;
                 return (
-                  <div key={t.teamId} className="flex items-center gap-4 rounded-2xl px-5 py-4" style={{ background: "var(--border-soft)" }}>
-                    <div className="flex-1 min-w-0">
+                  <div key={t.teamId}
+                    className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl px-5 py-4 transition-all"
+                    style={{
+                      background: isCopied ? "rgba(88,204,2,0.1)" : "var(--border-soft)",
+                      border: isCopied ? "2px solid rgba(88,204,2,0.3)" : "2px solid transparent",
+                    }}
+                  >
+                    <div
+                      onClick={async () => {
+                        let url = teamLinks[t.teamId];
+                        if (!url) {
+                          try {
+                            const token = await generateLoginToken("team", t.teamId, {
+                              teamCode: t.teamCode,
+                              targetIsTeam: true,
+                            });
+                            url = `${window.location.origin}/magic-login/${token}`;
+                            setTeamLinks((prev) => ({ ...prev, [t.teamId]: url }));
+                          } catch {
+                            flashError("Failed to generate link");
+                            return;
+                          }
+                        }
+                        await navigator.clipboard.writeText(url).catch(() => {});
+                        setLinkCopiedId(t.teamId);
+                        setTimeout(() => setLinkCopiedId(null), 2000);
+                      }}
+                      className="flex-1 min-w-0 cursor-pointer select-none"
+                    >
                       <div className="flex items-center gap-2">
                         <span className="text-[15px] font-black" style={{ color: "var(--fg)" }}>{t.teamName}</span>
-                        <span className="text-[11px] font-semibold" style={{ color: "var(--fg-muted)" }}>· leader: {t.leaderName}</span>
+                        <span className="text-[11px] font-semibold" style={{ color: "var(--fg-muted)" }}>· {t.leaderName}</span>
                       </div>
                       <p className="text-[11px] font-bold opacity-60" style={{ color: "var(--fg-muted)" }}>
                         {t.leaderEmail}
                       </p>
                     </div>
-                    {link ? (
                       <div className="flex items-center gap-2 shrink-0">
-                        <input readOnly value={link} className="w-48 rounded-xl border-2 px-3 py-2 text-[12px] font-mono font-bold outline-none truncate" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }} onClick={(e) => (e.target as HTMLInputElement).select()} />
-                        <button onClick={() => copyToClipboard(link, t.teamId)}
-                          className="btn-press rounded-xl px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide transition-all"
-                          style={{ background: linkCopiedId === t.teamId ? "var(--color-brand-green)" : "var(--surface)", color: linkCopiedId === t.teamId ? "#fff" : "var(--fg)" }}>
-                          {linkCopiedId === t.teamId ? "✅" : "📋 Copy"}
-                        </button>
-                      </div>
-                    ) : (
-                      <button onClick={() => handleGenerateTeamLink(t.teamId, t.teamCode)}
-                        className="btn-press rounded-2xl px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide transition-all shrink-0"
-                        style={{ background: "var(--color-brand-blue)", color: "#fff" }}>
-                        🔗 Generate
+                      <span className="text-[12px] font-extrabold uppercase cursor-pointer select-none"
+                        style={{ color: isCopied ? "var(--color-brand-green)" : "var(--color-brand-blue)" }}
+                        onClick={async () => {
+                          let url = teamLinks[t.teamId];
+                          if (!url) {
+                            try {
+                              const token = await generateLoginToken("team", t.teamId, {
+                                teamCode: t.teamCode,
+                                targetIsTeam: true,
+                              });
+                              url = `${window.location.origin}/magic-login/${token}`;
+                              setTeamLinks((prev) => ({ ...prev, [t.teamId]: url }));
+                            } catch {
+                              flashError("Failed to generate link");
+                              return;
+                            }
+                          }
+                          await navigator.clipboard.writeText(url).catch(() => {});
+                          setLinkCopiedId(t.teamId);
+                          setTimeout(() => setLinkCopiedId(null), 2000);
+                        }}>
+                        {isCopied ? "✅ Copied!" : link ? "📋 Copy" : "🔗 Generate"}
+                      </span>
+                      {emailedTeamIds.has(t.teamId) && (
+                        <span className="text-[11px] font-extrabold uppercase" style={{ color: "var(--color-brand-green)" }}>
+                          ✅ Sent
+                        </span>
+                      )}
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          setSendingTeamId(t.teamId);
+                          let url = teamLinks[t.teamId];
+                          if (!url) {
+                            try {
+                              const token = await generateLoginToken("team", t.teamId, {
+                                teamCode: t.teamCode,
+                                targetIsTeam: true,
+                              });
+                              url = `${window.location.origin}/magic-login/${token}`;
+                              setTeamLinks((prev) => ({ ...prev, [t.teamId]: url }));
+                            } catch {
+                              flashError("Failed to generate link");
+                              setSendingTeamId(null);
+                              return;
+                            }
+                          }
+                          const emailErr = await sendLoginEmail(t.leaderName, t.leaderEmail, t.teamName, t.teamCode, url);
+                          if (emailErr) {
+                            flashError(`${t.teamName}: ${emailErr}`);
+                          } else {
+                            setEmailedTeamIds((prev) => new Set(prev).add(t.teamId));
+                            flash(`✅ Email sent to ${t.leaderName}`);
+                          }
+                          setSendingTeamId(null);
+                        }}
+                        disabled={isSending}
+                        className="rounded-xl px-3 py-2 text-[12px] font-extrabold uppercase tracking-wide transition-all shrink-0 disabled:opacity-50"
+                        style={{ background: "var(--color-brand-green)", color: "#fff" }}
+                      >
+                        {isSending ? "⏳" : "📧 Email"}
                       </button>
-                    )}
+                    </div>
                   </div>
                 );
               })}
@@ -1746,43 +1831,57 @@ export default function AdminPage() {
         {/* Spot leader links */}
         <div className="card p-8" style={{ background: "var(--surface)", borderTop: "6px solid var(--color-brand-gold)" }}>
           <div className="mb-2 flex items-center gap-3">
-            <span className="text-2xl">📍</span>
+            <Globe className="h-5 w-5" style={{ color: "var(--color-brand-gold)" }} />
             <h3 className="text-[15px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-gold)" }}>
               Spot Leader Login Links
             </h3>
           </div>
           <p className="mb-6 text-[13px] font-semibold" style={{ color: "var(--fg-muted)" }}>
-            Generate a one-click login link for each spot leader. Share the link manually or copy it.
+            One-click login links for spot leaders. Links persist until regenerated.
           </p>
 
           <div className="grid gap-3">
             {spots.map((s) => {
               const link = spotLinks.find((l) => l.id === s.id);
+              const isCopied = linkCopiedId === s.id;
               return (
-                <div key={s.id} className="flex items-center gap-4 rounded-2xl px-5 py-4" style={{ background: "var(--border-soft)" }}>
+                <div key={s.id}
+                  className="flex items-center gap-4 rounded-2xl px-5 py-4 transition-all"
+                  style={{ background: "var(--border-soft)" }}>
                   <div className="flex-1 min-w-0">
                     <span className="text-[15px] font-black" style={{ color: "var(--fg)" }}>{s.name}</span>
                     <p className="text-[11px] font-bold opacity-60" style={{ color: "var(--fg-muted)" }}>
                       Code: {s.spot_leader_code}
                     </p>
                   </div>
-                  {link ? (
-                    <div className="flex items-center gap-2">
-                      <input readOnly value={link.url} className="w-48 rounded-xl border-2 px-3 py-2 text-[12px] font-mono font-bold outline-none truncate" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }} onClick={(e) => (e.target as HTMLInputElement).select()} />
-                      <button onClick={() => copyToClipboard(link.url, link.id)}
-                        className="btn-press rounded-xl px-4 py-2 text-[12px] font-extrabold uppercase tracking-wide transition-all"
-                        style={{ background: linkCopiedId === link.id ? "var(--color-brand-green)" : "var(--surface)", color: linkCopiedId === link.id ? "#fff" : "var(--fg)" }}>
-                        {linkCopiedId === link.id ? "✅" : "📋 Copy"}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {link ? (
+                      <>
+                        <input readOnly value={link.url}
+                          className="w-36 sm:w-48 rounded-xl border-2 px-3 py-2 text-[12px] font-mono font-bold outline-none truncate"
+                          style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }}
+                          onClick={(e) => (e.target as HTMLInputElement).select()} />
+                        <button onClick={() => copyToClipboard(link.url, s.id)}
+                          className="btn-press rounded-xl px-3 py-2 text-[12px] font-extrabold uppercase tracking-wide transition-all"
+                          style={{ background: isCopied ? "var(--color-brand-green)" : "var(--surface)", color: isCopied ? "#fff" : "var(--fg)" }}>
+                          {isCopied ? "✅" : "📋"}
+                        </button>
+                        <button onClick={() => handleGenerateSpotLink(s.id, s.name)}
+                          disabled={spotLinkLoading === s.id}
+                          className="btn-press rounded-xl px-3 py-2 text-[11px] font-extrabold uppercase tracking-wide transition-all"
+                          style={{ background: "rgba(255,200,0,0.12)", color: "var(--color-brand-gold)", opacity: spotLinkLoading === s.id ? 0.6 : 1 }}>
+                          {spotLinkLoading === s.id ? "⏳" : "🔄"}
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => handleGenerateSpotLink(s.id, s.name)}
+                        disabled={spotLinkLoading === s.id}
+                        className="btn-press rounded-2xl px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide transition-all"
+                        style={{ background: "var(--color-brand-blue)", color: "#fff", opacity: spotLinkLoading === s.id ? 0.6 : 1 }}>
+                        {spotLinkLoading === s.id ? "⏳" : "🔗 Generate"}
                       </button>
-                    </div>
-                  ) : (
-                    <button onClick={() => handleGenerateSpotLink(s.id, s.name)}
-                      disabled={spotLinkLoading === s.id}
-                      className="btn-press rounded-2xl px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide transition-all"
-                      style={{ background: "var(--color-brand-blue)", color: "#fff", opacity: spotLinkLoading === s.id ? 0.6 : 1 }}>
-                      {spotLinkLoading === s.id ? "⏳" : "🔗 Generate"}
-                    </button>
-                  )}
+                    )}
+                  </div>
                 </div>
               );
             })}

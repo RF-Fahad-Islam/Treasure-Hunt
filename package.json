@@ -12,7 +12,9 @@
   "dependencies": {
     "@dicebear/adventurer-neutral": "^9.4.2",
     "@dicebear/core": "^9.4.2",
+    "@emailjs/browser": "^4.4.1",
     "@insforge/sdk": "^1.2.9",
+    "@vercel/analytics": "^2.0.1",
     "canvas-confetti": "^1.9.4",
     "chart.js": "^4.5.1",
     "leaflet": "^1.9.4",

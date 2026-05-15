@@ -40,12 +40,12 @@ export function OSStatusBar({ teamName, teamSeed, teamMembers, hasGps, teamId, o
   }, [menuOpen]);
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-2.5 backdrop-blur-xl border-b border-white/10"
-      style={{ background: "rgba(10,10,14,0.85)" }}>
+    <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 backdrop-blur-xl border-b"
+      style={{ paddingTop: "calc(0.625rem + env(safe-area-inset-top, 0px))", paddingBottom: "0.625rem", background: "rgba(255,255,255,0.92)", borderColor: "rgba(0,0,0,0.06)" }}>
       {/* Left: Clock */}
       <div className="flex items-center gap-2">
         <span className="text-[16px] font-extrabold tabular-nums tracking-wide"
-          style={{ color: "var(--fg)" }}>
+          style={{ color: "#2B2B2B" }}>
           {time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
         </span>
       </div>
@@ -53,7 +53,8 @@ export function OSStatusBar({ teamName, teamSeed, teamMembers, hasGps, teamId, o
       {/* Center: GPS + Notifications */}
       <div className="flex items-center gap-3">
         {hasGps && (
-          <span className="flex items-center gap-1.5 rounded-full bg-[var(--surface)] px-2.5 py-1.5 text-[11px] font-bold shadow-lg" style={{ color: "#22c55e" }}>
+          <span className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-bold"
+            style={{ background: "#F0FFF0", color: "#22c55e", boxShadow: "0 2px 0 rgba(34,197,94,0.15)" }}>
             <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />GPS
           </span>
         )}
@@ -64,15 +65,16 @@ export function OSStatusBar({ teamName, teamSeed, teamMembers, hasGps, teamId, o
       <div className="relative" ref={menuRef}>
         <button
           onClick={() => setMenuOpen((o) => !o)}
-          className="flex items-center gap-2 rounded-full bg-[var(--surface)] px-3 py-1.5 shadow-xl hover:opacity-80 transition-opacity"
+          className="flex items-center gap-2 rounded-full px-3 py-1.5 transition-all hover:opacity-80"
+          style={{ background: "#FFFFFF", boxShadow: "0 2px 0 rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04)" }}
         >
           <img
             src={getAvatarUrl(teamSeed, 32)}
             alt={teamName}
             className="w-7 h-7 rounded-lg shrink-0"
           />
-          <span className="text-[13px] font-black max-w-[100px] truncate" style={{ color: "var(--fg)" }}>{teamName}</span>
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ color: "var(--fg-muted)" }}
+          <span className="text-[13px] font-black max-w-[100px] truncate" style={{ color: "#2B2B2B" }}>{teamName}</span>
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ color: "#777777" }}
             className={`transition-transform ${menuOpen ? "rotate-180" : ""}`}>
             <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
@@ -85,24 +87,31 @@ export function OSStatusBar({ teamName, teamSeed, teamMembers, hasGps, teamId, o
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -4, scale: 0.95 }}
               transition={{ duration: 0.12 }}
-              className="absolute right-0 mt-2 w-56 rounded-2xl bg-[#1A1A1A] border border-white/10 shadow-2xl overflow-hidden z-50"
+              className="absolute right-0 mt-2 w-56 rounded-2xl overflow-hidden z-50"
+              style={{ background: "#FFFFFF", boxShadow: "0 4px 0 rgba(0,0,0,0.08), 0 16px 32px -8px rgba(0,0,0,0.12)", border: "1px solid rgba(0,0,0,0.06)" }}
             >
-              <div className="px-4 py-3 border-b border-white/10">
-                <p className="text-[13px] font-black text-white">{teamName}</p>
-                <p className="text-[11px] font-semibold text-[#888] mt-0.5">{teamMembers.length} members</p>
+              <div className="px-4 py-3 border-b" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
+                <p className="text-[13px] font-black" style={{ color: "#2B2B2B" }}>{teamName}</p>
+                <p className="text-[11px] font-semibold mt-0.5" style={{ color: "#777777" }}>{teamMembers.length} members</p>
               </div>
               {isLeader && (
                 <>
                   <button
                     onClick={() => { setMenuOpen(false); onTeamNameEdit(); }}
-                    className="w-full text-left px-4 py-3 text-[13px] font-bold text-white hover:bg-white/5 transition-colors flex items-center gap-2"
+                    className="w-full text-left px-4 py-3 text-[13px] font-bold transition-colors flex items-center gap-2"
+                    style={{ color: "#2B2B2B" }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.03)"}
+                    onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                     Edit Team Name
                   </button>
                   <button
                     onClick={() => { setMenuOpen(false); onTeamAvatarEdit(); }}
-                    className="w-full text-left px-4 py-3 text-[13px] font-bold text-white hover:bg-white/5 transition-colors flex items-center gap-2"
+                    className="w-full text-left px-4 py-3 text-[13px] font-bold transition-colors flex items-center gap-2"
+                    style={{ color: "#2B2B2B" }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.03)"}
+                    onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                     Change Team Logo
@@ -111,8 +120,10 @@ export function OSStatusBar({ teamName, teamSeed, teamMembers, hasGps, teamId, o
               )}
               <button
                 onClick={() => { setMenuOpen(false); clearSession(); }}
-                className="w-full text-left px-4 py-3 text-[13px] font-bold hover:bg-white/5 transition-colors flex items-center gap-2"
-                style={{ color: "var(--color-brand-red)" }}
+                className="w-full text-left px-4 py-3 text-[13px] font-bold transition-colors flex items-center gap-2"
+                style={{ color: "#FF4B4B" }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.03)"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
                 Log Out

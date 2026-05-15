@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Backdrop } from "@/components/Backdrop";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Reveal } from "@/components/Reveal";
@@ -123,11 +122,10 @@ export default function SpotLeaderPage() {
 
   if (!spotId) {
     return (
-      <div className="relative min-h-screen overflow-hidden">
-        <Backdrop />
-        <div className="relative z-10 flex min-h-screen flex-col items-center justify-center p-8">
+    <div className="relative min-h-screen overflow-hidden pb-6" style={{ background: "#F7F7F7", paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom, 0px))" }}>
+        <div className="flex min-h-screen flex-col items-center justify-center p-8">
           <p className="text-5xl">🔐</p>
-          <p className="mt-4 font-display text-2xl font-extrabold" style={{ color: "var(--fg-muted)" }}>
+          <p className="mt-4 font-display text-2xl font-extrabold" style={{ color: "#777777" }}>
             Not logged in
           </p>
         </div>
@@ -139,8 +137,7 @@ export default function SpotLeaderPage() {
   const mapTeams = teamLocations.filter(t => arrivingIds.has(t.id));
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      <Backdrop />
+    <div className="relative min-h-screen overflow-hidden" style={{ background: "#F7F7F7" }}>
 
       <SuccessOverlay
         open={showSuccess}
@@ -159,18 +156,18 @@ export default function SpotLeaderPage() {
         onConfirm={async () => {
           if (!confirmHandler) return;
           setConfirmLoading(true);
-          try { await confirmHandler(); } finally { setConfirmLoading(false); setConfirmDef(null); setConfirmHandler(null); }
-        }}
+          try { await confirmHandler(); } finally { setConfirmLoading(false); setConfirmDef(null); setConfirmHandler(null); }}
+        }
         onCancel={() => { setConfirmDef(null); setConfirmHandler(null); }}
       />
 
       <BroadcastBanner broadcast={broadcast} />
 
-      <div className="relative z-20 flex items-center justify-between px-4 py-4 sm:px-8">
-        <Logo className="h-10 w-10 sm:h-12 sm:w-12 drop-shadow-md" />
+      <div className="relative z-20 flex items-center justify-between px-4 py-4 sm:px-8" style={{ background: "#FFFFFF", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+        <Logo className="h-10 w-10 sm:h-12 sm:w-12" />
         <div className="flex items-center gap-2 sm:gap-3">
           {session?.role === "spot-leader" && (
-            <span className="hidden sm:inline-block rounded-full bg-[var(--surface)] px-4 py-2 text-[13px] font-bold shadow-lg" style={{ color: "var(--fg-muted)" }}>
+            <span className="hidden sm:inline-block rounded-full px-4 py-2 text-[13px] font-bold" style={{ background: "#F0F7FF", color: "#1CB0F6", boxShadow: "0 2px 0 rgba(28,176,246,0.15)" }}>
               📍 {session.spotName}
             </span>
           )}
@@ -179,8 +176,8 @@ export default function SpotLeaderPage() {
               setConfirmDef({ title: "Logout", message: "Are you sure you want to logout?" });
               setConfirmHandler(async () => { clearSession(); });
             }}
-            className="ripple touch-press rounded-full px-4 sm:px-6 py-2 sm:py-2.5 text-[12px] sm:text-[14px] font-black uppercase tracking-wide transition-opacity hover:opacity-70 shadow-xl"
-            style={{ color: "var(--fg-muted)", background: "var(--surface)" }}
+            className="rounded-full px-4 sm:px-6 py-2 sm:py-2.5 text-[12px] sm:text-[14px] font-black uppercase tracking-wide transition-all"
+            style={{ color: "#777777", background: "#F0F0F0", boxShadow: "0 2px 0 rgba(0,0,0,0.06)" }}
           >
             🚪 Logout
           </button>
@@ -188,14 +185,14 @@ export default function SpotLeaderPage() {
         </div>
       </div>
 
-      <div className="relative z-10 mx-auto max-w-3xl px-4 pb-20 pt-10 sm:pt-20">
+      <div className="relative z-10 mx-auto max-w-3xl px-4 pb-20 pt-10 sm:pt-12">
 
         <Reveal duration={0.5}>
-          <header className="mb-10 text-center">
-            <h1 className="font-display text-[28px] sm:text-[32px] font-black" style={{ color: "var(--fg)" }}>
+          <header className="mb-8 text-center">
+            <h1 className="font-display text-[28px] sm:text-[32px] font-black" style={{ color: "#2B2B2B" }}>
               {data?.spot.name ?? "Spot Leader"}
             </h1>
-            <p className="mt-2 text-[13px] sm:text-[15px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--fg-muted)" }}>
+            <p className="mt-2 text-[13px] sm:text-[15px] font-black uppercase tracking-[0.2em]" style={{ color: "#777777" }}>
               📍 {data?.spot.location_hint ?? ""}
             </p>
           </header>
@@ -207,19 +204,23 @@ export default function SpotLeaderPage() {
               initial={{ opacity: 0, y: -20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -20, scale: 0.95 }}
-              className="mb-8 overflow-hidden rounded-[32px] border-4 p-6 shadow-xl"
+              className="mb-8 overflow-hidden rounded-[24px] p-6"
               style={{
                 background: justArrivedTeamIds.length > 0
-                  ? "linear-gradient(135deg, var(--color-brand-green), #1a8a02)"
-                  : "var(--color-brand-green)",
-                borderColor: "var(--color-brand-green-dark)",
+                  ? "linear-gradient(135deg, #58CC02, #3A8400)"
+                  : "#58CC02",
+                boxShadow: "0 4px 0 #3A8400, 0 8px 16px -4px rgba(0,0,0,0.1)",
                 color: "#fff",
               }}
             >
               <div className="flex items-center gap-4">
-                <span className="text-4xl" style={{ animation: justArrivedTeamIds.length > 0 ? "bounce 0.6s infinite" : "none" }}>
+                <motion.span
+                  animate={justArrivedTeamIds.length > 0 ? { scale: [1, 1.2, 1] } : {}}
+                  transition={{ repeat: Infinity, duration: 1.5 }}
+                  className="text-4xl"
+                >
                   {justArrivedTeamIds.length > 0 ? "🚨" : "⚡"}
-                </span>
+                </motion.span>
                 <div>
                   <h3 className="text-[18px] font-black uppercase tracking-wide">
                     {justArrivedTeamIds.length > 0 ? "New Team Arrived!" : "Team Incoming!"}
@@ -245,9 +246,9 @@ export default function SpotLeaderPage() {
             animate={{ opacity: 1, scale: 1 }}
             className="mb-8 rounded-3xl px-6 py-4 text-center text-[15px] font-bold"
             style={{
-              background: "rgba(255,75,75,0.1)",
-              border: "2px solid rgba(255,75,75,0.3)",
-              color: "var(--color-brand-red)",
+              background: "rgba(255,75,75,0.08)",
+              border: "2px solid rgba(255,75,75,0.2)",
+              color: "#FF4B4B",
             }}
             role="alert"
           >
@@ -256,26 +257,22 @@ export default function SpotLeaderPage() {
         )}
 
         <Reveal delay={0.08} duration={0.55}>
-          <div className="card border-t-[8px] mb-8 p-6 sm:p-10" style={{ background: "var(--surface)", borderColor: "var(--color-brand-blue)" }}>
+          <div className="rounded-[24px] p-6 sm:p-8 mb-8"
+            style={{ background: "#FFFFFF", boxShadow: "0 4px 0 #1CB0F6, 0 12px 24px -8px rgba(0,0,0,0.06)" }}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <p className="text-[12px] sm:text-[14px] font-black uppercase tracking-[0.18em]" style={{ color: "var(--fg-muted)" }}>
+                <p className="text-[12px] sm:text-[14px] font-black uppercase tracking-[0.18em]" style={{ color: "#777777" }}>
                   🏠 Your Spot
                 </p>
-                <p className="mt-2 text-[16px] sm:text-[19px] font-black leading-relaxed" style={{ color: "var(--fg)" }}>
+                <p className="mt-2 text-[16px] sm:text-[19px] font-black leading-relaxed" style={{ color: "#2B2B2B" }}>
                   {data?.spot.description ?? "Loading…"}
                 </p>
               </div>
               <button
-                data-sound="heavy"
                 onClick={load}
                 disabled={loading}
-                className="btn-press ripple w-full sm:w-auto rounded-[20px] px-6 sm:px-8 py-3 sm:py-4 text-[14px] sm:text-[15px] font-black uppercase tracking-wide"
-                style={{
-                  background: "var(--surface)",
-                  border: "3px solid var(--border-soft)",
-                  color: "var(--fg-muted)",
-                }}
+                className="w-full sm:w-auto rounded-[20px] px-6 sm:px-8 py-3 sm:py-4 text-[14px] sm:text-[15px] font-black uppercase tracking-wide transition-all"
+                style={{ background: "#F0F0F0", boxShadow: "0 3px 0 rgba(0,0,0,0.08)", color: "#777777" }}
               >
                 {loading ? "⟳" : "🔄 Refresh"}
               </button>
@@ -287,10 +284,10 @@ export default function SpotLeaderPage() {
         <Reveal delay={0.1} duration={0.5}>
           <div className="mb-8">
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-[13px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--fg-muted)" }}>
+              <p className="text-[13px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "#777777" }}>
                 📍 {data?.spot?.name ?? "Spot"} Location
               </p>
-              <span className="text-[12px] font-bold" style={{ color: "var(--fg-muted)" }}>
+              <span className="text-[12px] font-bold" style={{ color: "#777777" }}>
                 🟢 {mapTeams.filter(t => t.isActive && !t.isDisqualified).length} assigned teams active
                 {data?.spot?.latitude && (
                   <span className="ml-3">
@@ -299,7 +296,9 @@ export default function SpotLeaderPage() {
                 )}
               </span>
             </div>
-            <TeamMap teams={mapTeams} spots={data?.spot ? [data.spot] : []} height="360px" />
+            <div className="rounded-[16px] overflow-hidden" style={{ boxShadow: "0 4px 0 rgba(0,0,0,0.06), 0 12px 24px -8px rgba(0,0,0,0.08)" }}>
+              <TeamMap teams={mapTeams} spots={data?.spot ? [data.spot] : []} height="360px" />
+            </div>
           </div>
         </Reveal>
 
@@ -313,7 +312,7 @@ export default function SpotLeaderPage() {
               >
                 🔍
               </motion.p>
-              <p className="mt-4 text-[16px] font-bold" style={{ color: "var(--fg-muted)" }}>
+              <p className="mt-4 text-[16px] font-bold" style={{ color: "#777777" }}>
                 Loading teams…
               </p>
             </div>
@@ -321,7 +320,8 @@ export default function SpotLeaderPage() {
 
           {data && data.arrivingTeams.length === 0 && (
             <Reveal>
-              <div className="card p-12 text-center" style={{ background: "var(--surface)" }}>
+              <div className="rounded-[24px] p-12 text-center"
+                style={{ background: "#FFFFFF", boxShadow: "0 4px 0 rgba(0,0,0,0.06), 0 12px 24px -8px rgba(0,0,0,0.08)" }}>
                 <motion.p
                   animate={{ y: [0, -6, 0] }}
                   transition={{ repeat: Infinity, duration: 2 }}
@@ -329,10 +329,10 @@ export default function SpotLeaderPage() {
                 >
                   📍
                 </motion.p>
-                <p className="mt-4 text-[22px] font-extrabold" style={{ color: "var(--fg-muted)" }}>
+                <p className="mt-4 text-[22px] font-extrabold" style={{ color: "#777777" }}>
                   No teams at this spot yet
                 </p>
-                <p className="mt-2 text-[15px] font-semibold" style={{ color: "var(--fg-muted)" }}>
+                <p className="mt-2 text-[15px] font-semibold" style={{ color: "#999999" }}>
                   Teams will appear here when they reach your clue.
                 </p>
               </div>
@@ -351,20 +351,20 @@ export default function SpotLeaderPage() {
               >
                 <Reveal>
                   <div
-                    className="card border-t-[8px] p-5 sm:p-10 transition-all touch-press ripple"
+                    className="rounded-[24px] p-5 sm:p-8 transition-all"
                     style={{
                       background: successId === team.teamId
-                        ? "linear-gradient(135deg, rgba(88,204,2,0.08), rgba(88,204,2,0.02))"
-                        : "var(--surface)",
-                      borderColor: successId === team.teamId
-                        ? "var(--color-brand-green)"
-                        : "var(--color-brand-gold)",
+                        ? "#F0FFF0"
+                        : "#FFFFFF",
+                      boxShadow: successId === team.teamId
+                        ? "0 4px 0 #58CC02, 0 12px 24px -8px rgba(0,0,0,0.06)"
+                        : "0 4px 0 #FFC800, 0 12px 24px -8px rgba(0,0,0,0.06)",
                     }}
                   >
                     <div className="flex flex-col sm:flex-row items-start justify-between gap-6">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                          <span className="text-[20px] sm:text-[26px] font-black truncate max-w-[200px] sm:max-w-none" style={{ color: "var(--fg)" }}>
+                          <span className="text-[20px] sm:text-[26px] font-black truncate max-w-[200px] sm:max-w-none" style={{ color: "#2B2B2B" }}>
                             {team.teamName}
                           </span>
                           <div className="flex flex-wrap items-center gap-2">
@@ -373,12 +373,12 @@ export default function SpotLeaderPage() {
                               style={{
                                 background:
                                   team.status === "active"
-                                    ? "rgba(88,204,2,0.15)"
-                                    : "rgba(255,200,0,0.15)",
+                                    ? "rgba(88,204,2,0.1)"
+                                    : "rgba(255,200,0,0.1)",
                                 color:
                                   team.status === "active"
-                                    ? "var(--color-brand-green)"
-                                    : "var(--color-brand-gold)",
+                                    ? "#58CC02"
+                                    : "#FFC800",
                               }}
                             >
                               {team.status === "active" ? "🟢 Active" : "🟡 Pending"}
@@ -389,8 +389,8 @@ export default function SpotLeaderPage() {
                                 <span
                                   className="rounded-xl px-2 sm:px-3 py-1 text-[9px] sm:text-[11px] font-extrabold uppercase tracking-wide"
                                   style={{
-                                    background: loc.isActive ? "rgba(88,204,2,0.15)" : "rgba(156,163,175,0.15)",
-                                    color: loc.isActive ? "var(--color-brand-green)" : "var(--fg-muted)",
+                                    background: loc.isActive ? "rgba(88,204,2,0.1)" : "rgba(156,163,175,0.1)",
+                                    color: loc.isActive ? "#58CC02" : "#777777",
                                   }}
                                 >
                                   {loc.isActive ? "🟢 Live" : "⚪ Offline"}
@@ -400,19 +400,19 @@ export default function SpotLeaderPage() {
                           </div>
                         </div>
 
-                        <p className="mt-3 text-[14px] sm:text-[15px] font-semibold leading-relaxed" style={{ color: "var(--fg-muted)" }}>
+                        <p className="mt-3 text-[14px] sm:text-[15px] font-semibold leading-relaxed" style={{ color: "#777777" }}>
                           {team.clueText.length > 120
                             ? team.clueText.slice(0, 120) + "…"
                             : team.clueText}
                         </p>
 
-                        <p className="mt-3 flex items-center gap-2 text-[12px] sm:text-[13px] font-extrabold" style={{ color: "var(--fg-muted)" }}>
+                        <p className="mt-3 flex items-center gap-2 text-[12px] sm:text-[13px] font-extrabold" style={{ color: "#999999" }}>
                           ⏱ Hunting for {team.timeElapsedMinutes}m
                         </p>
 
                         {team.fullRoute && team.fullRoute.length > 0 && (
-                          <div className="mt-6 pt-6 border-t-[3px] border-dashed border-[var(--border-soft)]">
-                            <p className="mb-4 text-[12px] sm:text-[13px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--fg-muted)" }}>
+                          <div className="mt-6 pt-6 border-t-[3px] border-dashed" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
+                            <p className="mb-4 text-[12px] sm:text-[13px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "#777777" }}>
                               🗺 Route Journey
                             </p>
                             <div className="flex flex-wrap items-center gap-2">
@@ -422,18 +422,18 @@ export default function SpotLeaderPage() {
                                     className="rounded-full px-2.5 py-1.5 text-[10px] sm:text-[12px] font-black uppercase tracking-wide"
                                     style={{
                                       background: step.isCurrent 
-                                        ? "var(--color-brand-blue)" 
+                                        ? "#1CB0F6"
                                         : step.status === "completed" || step.status === "solved" 
-                                          ? "var(--color-brand-green)" 
-                                          : "var(--border-soft)",
-                                      color: step.isCurrent || step.status === "completed" || step.status === "solved" ? "#fff" : "var(--fg-muted)",
+                                          ? "#58CC02"
+                                          : "#F0F0F0",
+                                      color: step.isCurrent || step.status === "completed" || step.status === "solved" ? "#fff" : "#777777",
                                       opacity: step.status === "pending" && !step.isCurrent ? 0.6 : 1,
                                     }}
                                   >
                                     {step.isCurrent ? "📍" : step.status === "completed" || step.status === "solved" ? "✓" : "⏳"} {step.spotName}
                                   </span>
                                   {idx < team.fullRoute.length - 1 && (
-                                    <span className="text-[var(--fg-muted)] opacity-50 font-bold text-xs">→</span>
+                                    <span className="opacity-30 font-bold text-xs" style={{ color: "#777777" }}>→</span>
                                   )}
                                 </div>
                               ))}
@@ -443,19 +443,18 @@ export default function SpotLeaderPage() {
                       </div>
 
                       <motion.button
-                        data-sound="success"
                         whileTap={{ scale: 0.92 }}
                         onClick={() => openMiniGame(team)}
                         disabled={successId === team.teamId}
-                        className="btn-press ripple w-full sm:w-auto shrink-0 rounded-[20px] sm:rounded-[24px] px-8 sm:px-10 py-3.5 sm:py-6 text-[15px] sm:text-[17px] font-black uppercase tracking-wide text-white transition-all"
+                        className="w-full sm:w-auto shrink-0 rounded-[20px] sm:rounded-[24px] px-8 sm:px-10 py-3.5 sm:py-6 text-[15px] sm:text-[17px] font-black uppercase tracking-wide text-white transition-all"
                         style={{
                           background:
                             successId === team.teamId
-                              ? "var(--color-brand-green)"
-                              : "linear-gradient(135deg, var(--color-brand-blue), #1a6df0)",
+                              ? "#58CC02"
+                              : "linear-gradient(135deg, #1CB0F6, #0f7ac0)",
                           boxShadow: successId === team.teamId
-                            ? "0 8px 0 0 color-mix(in srgb, var(--color-brand-green) 60%, black)"
-                            : "0 8px 0 0 #0f4a9e",
+                            ? "0 4px 0 #3A8400"
+                            : "0 4px 0 #0f4a9e",
                           opacity: successId === team.teamId ? 0.7 : 1,
                           cursor: successId === team.teamId ? "not-allowed" : "pointer",
                         }}
@@ -473,7 +472,7 @@ export default function SpotLeaderPage() {
         </div>
 
         <Reveal delay={0.2} duration={0.5}>
-          <p className="mt-12 text-center text-[13px] font-semibold" style={{ color: "var(--fg-muted)" }}>
+          <p className="mt-12 text-center text-[13px] font-semibold" style={{ color: "#BBBBBB" }}>
             Treasure Hunt · University of Dhaka — CSE
           </p>
         </Reveal>
@@ -486,15 +485,15 @@ export default function SpotLeaderPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-md"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md" style={{ background: "rgba(0,0,0,0.6)" }}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.85, y: 30 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.85, y: 30 }}
               transition={{ type: "spring", stiffness: 250, damping: 22 }}
-              className="card w-full max-w-md p-6 sm:p-10"
-              style={{ background: "var(--surface)" }}
+              className="w-full max-w-md rounded-[24px] p-6 sm:p-8"
+              style={{ background: "#FFFFFF", boxShadow: "0 4px 0 rgba(0,0,0,0.08), 0 16px 32px -8px rgba(0,0,0,0.12)" }}
             >
               <motion.p
                 initial={{ rotate: -10, scale: 0 }}
@@ -509,7 +508,7 @@ export default function SpotLeaderPage() {
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.1 }}
                 className="mb-1 text-center text-[22px] sm:text-[26px] font-extrabold"
-                style={{ color: "var(--fg)" }}
+                style={{ color: "#2B2B2B" }}
               >
                 {miniGameTeam.teamName}
               </motion.h2>
@@ -518,7 +517,7 @@ export default function SpotLeaderPage() {
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.15 }}
                 className="mb-6 sm:mb-8 text-center text-[14px] sm:text-[15px] font-semibold"
-                style={{ color: "var(--fg-muted)" }}
+                style={{ color: "#777777" }}
               >
                 Approve team &amp; award points
               </motion.p>
@@ -529,10 +528,10 @@ export default function SpotLeaderPage() {
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.2 }}
               >
-                <p className="mb-3 text-[12px] sm:text-[14px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-gold)" }}>
+                <p className="mb-3 text-[12px] sm:text-[14px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "#FFC800" }}>
                   🎯 Play Mini-Game
                 </p>
-                <p className="mb-4 text-[13px] sm:text-[14px] font-semibold" style={{ color: "var(--fg-muted)" }}>
+                <p className="mb-4 text-[13px] sm:text-[14px] font-semibold" style={{ color: "#777777" }}>
                   Select bonus points (on top of +100):
                 </p>
                 <div className="mb-6 flex flex-wrap justify-center sm:justify-start gap-2">
@@ -541,11 +540,11 @@ export default function SpotLeaderPage() {
                       key={p}
                       whileTap={{ scale: 0.9 }}
                       onClick={() => setSelectedPoints(p)}
-                      className="btn-press ripple rounded-2xl px-4 sm:px-5 py-2.5 sm:py-3 text-[14px] sm:text-[16px] font-extrabold transition-all"
+                      className="rounded-2xl px-4 sm:px-5 py-2.5 sm:py-3 text-[14px] sm:text-[16px] font-extrabold transition-all"
                       style={{
-                        background: selectedPoints === p ? "var(--color-brand-gold)" : "var(--border-soft)",
-                        color: selectedPoints === p ? "#000" : "var(--fg-muted)",
-                        boxShadow: selectedPoints === p ? "0 4px 0 0 rgba(200,150,0,0.5)" : "none",
+                        background: selectedPoints === p ? "#FFC800" : "#F0F0F0",
+                        color: selectedPoints === p ? "#2B2B2B" : "#777777",
+                        boxShadow: selectedPoints === p ? "0 3px 0 rgba(200,150,0,0.5)" : "0 2px 0 rgba(0,0,0,0.06)",
                         transform: selectedPoints === p ? "scale(1.05)" : "scale(1)",
                       }}
                     >
@@ -561,34 +560,34 @@ export default function SpotLeaderPage() {
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.25 }}
               >
-                <p className="mb-3 text-[12px] sm:text-[14px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-red)" }}>
+                <p className="mb-3 text-[12px] sm:text-[14px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "#FF4B4B" }}>
                   ⏳ Penalty (optional)
                 </p>
                 <div className="mb-8 flex items-center justify-center sm:justify-start gap-4">
                   <motion.button
                     whileTap={{ scale: 0.9 }}
                     onClick={() => setPenaltyMinutes(Math.max(0, penaltyMinutes - 1))}
-                    className="btn-press ripple flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl text-[18px] sm:text-[22px] font-extrabold"
-                    style={{ background: "var(--border-soft)", color: "var(--fg)" }}
+                    className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl text-[18px] sm:text-[22px] font-extrabold"
+                    style={{ background: "#F0F0F0", color: "#2B2B2B" }}
                   >
                     −
                   </motion.button>
-                  <span className="min-w-[4rem] sm:min-w-[5rem] text-center text-[28px] sm:text-[32px] font-extrabold tabular-nums" style={{ color: "var(--color-brand-red)" }}>
+                  <span className="min-w-[4rem] sm:min-w-[5rem] text-center text-[28px] sm:text-[32px] font-extrabold tabular-nums" style={{ color: "#FF4B4B" }}>
                     {penaltyMinutes}m
                   </span>
                   <motion.button
                     whileTap={{ scale: 0.9 }}
                     onClick={() => setPenaltyMinutes(penaltyMinutes + 1)}
-                    className="btn-press ripple flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl text-[18px] sm:text-[22px] font-extrabold"
-                    style={{ background: "var(--border-soft)", color: "var(--fg)" }}
+                    className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl text-[18px] sm:text-[22px] font-extrabold"
+                    style={{ background: "#F0F0F0", color: "#2B2B2B" }}
                   >
                     +
                   </motion.button>
                   {penaltyMinutes > 0 && (
                     <button
                       onClick={() => setPenaltyMinutes(0)}
-                      className="btn-press ripple rounded-2xl px-3 py-1.5 text-[11px] sm:text-[12px] font-extrabold uppercase tracking-wide"
-                      style={{ color: "var(--fg-muted)" }}
+                      className="rounded-2xl px-3 py-1.5 text-[11px] sm:text-[12px] font-extrabold uppercase tracking-wide"
+                      style={{ color: "#777777" }}
                     >
                       ✕ Clear
                     </button>
@@ -601,13 +600,12 @@ export default function SpotLeaderPage() {
                   initial={{ x: -20, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
                   transition={{ delay: 0.3 }}
-                  data-sound="success"
                   onClick={handleApproveWithMiniGame}
                   disabled={selectedPoints === null || dialogBusy}
-                  className="btn-press ripple w-full rounded-2xl px-8 py-3.5 sm:py-4 text-[15px] sm:text-[16px] font-extrabold uppercase tracking-wide text-white transition-all"
+                  className="w-full rounded-2xl px-8 py-3.5 sm:py-4 text-[15px] sm:text-[16px] font-extrabold uppercase tracking-wide text-white transition-all"
                   style={{
-                    background: "var(--color-brand-gold)",
-                    boxShadow: "0 6px 0 0 color-mix(in srgb, var(--color-brand-gold) 60%, black)",
+                    background: "#FFC800",
+                    boxShadow: "0 4px 0 rgba(200,150,0,0.5)",
                     opacity: selectedPoints === null || dialogBusy ? 0.4 : 1,
                     cursor: selectedPoints === null || dialogBusy ? "not-allowed" : "pointer",
                   }}
@@ -621,10 +619,10 @@ export default function SpotLeaderPage() {
                   transition={{ delay: 0.35 }}
                   onClick={handleApproveSkip}
                   disabled={dialogBusy}
-                  className="btn-press ripple w-full rounded-2xl px-8 py-3.5 sm:py-4 text-[15px] sm:text-[16px] font-extrabold uppercase tracking-wide text-white transition-all"
+                  className="w-full rounded-2xl px-8 py-3.5 sm:py-4 text-[15px] sm:text-[16px] font-extrabold uppercase tracking-wide text-white transition-all"
                   style={{
-                    background: "var(--color-brand-green)",
-                    boxShadow: "0 6px 0 0 color-mix(in srgb, var(--color-brand-green) 60%, black)",
+                    background: "#58CC02",
+                    boxShadow: "0 4px 0 #3A8400",
                     opacity: dialogBusy ? 0.5 : 1,
                   }}
                 >
@@ -637,11 +635,11 @@ export default function SpotLeaderPage() {
                   transition={{ delay: 0.4 }}
                   onClick={closeMiniGame}
                   disabled={dialogBusy}
-                  className="btn-press ripple w-full rounded-2xl px-8 py-3.5 sm:py-4 text-[14px] sm:text-[15px] font-extrabold uppercase tracking-wide transition-all"
+                  className="w-full rounded-2xl px-8 py-3.5 sm:py-4 text-[14px] sm:text-[15px] font-extrabold uppercase tracking-wide transition-all"
                   style={{
-                    background: "var(--surface)",
-                    border: "3px solid var(--border-soft)",
-                    color: "var(--fg-muted)",
+                    background: "#F0F0F0",
+                    boxShadow: "0 3px 0 rgba(0,0,0,0.06)",
+                    color: "#777777",
                     opacity: dialogBusy ? 0.4 : 1,
                     cursor: dialogBusy ? "not-allowed" : "pointer",
                   }}
