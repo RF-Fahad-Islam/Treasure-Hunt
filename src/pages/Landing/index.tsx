@@ -9,6 +9,7 @@ import { BottomCTA } from "@/components/BottomCTA";
 import { Footer } from "@/components/Footer";
 import { Backdrop } from "@/components/Backdrop";
 import { MiniGame } from "@/components/MiniGame";
+import { TreasurePuzzle } from "@/components/TreasurePuzzle";
 
 /**
  * Landing page — the original App.tsx content, moved here unchanged.
@@ -23,6 +24,7 @@ export default function LandingPage() {
         <Hero />
         <Experience />
         <HowItWorks />
+        <TreasurePuzzle />
         <SpotsMarquee />
         <LiveLeaderboard />
         <CountdownTimer />
