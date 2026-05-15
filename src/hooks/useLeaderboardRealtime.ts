@@ -12,7 +12,7 @@ export function useLeaderboardRealtime(): LeaderboardEntry[] {
       .map((t, i) => ({ ...t, rank: i + 1 })), []);
 
   const handleTeamUpdate = useCallback((payload: any) => {
-    const { id, name, total_points, total_penalty_seconds } = payload;
+    const { id, name, total_points, total_penalty_seconds, avatar_seed } = payload;
     setEntries((prev) => {
       const next = [...prev];
       const idx = next.findIndex((t) => t.id === id);
@@ -23,6 +23,7 @@ export function useLeaderboardRealtime(): LeaderboardEntry[] {
         penalty: total_penalty_seconds ?? 0,
         rank: 0,
         completed: payload.hunt_completed ?? false,
+        avatarSeed: avatar_seed || name,
       };
       if (idx >= 0) {
         next[idx] = row;
@@ -51,6 +52,7 @@ export function useLeaderboardRealtime(): LeaderboardEntry[] {
           penalty: t.total_penalty_seconds ?? 0,
           rank: 0,
           completed: t.hunt_completed ?? false,
+          avatarSeed: t.avatar_seed || t.name,
         }));
         const ranked = deriveRanks(rows);
         entriesRef.current = ranked;

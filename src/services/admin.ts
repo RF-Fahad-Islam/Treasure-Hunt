@@ -381,17 +381,20 @@ export async function approveRegistration(id: string): Promise<Registration> {
     .eq("id", id);
   if (updateErr) throw new Error(updateErr.message);
 
-  // Copy avatar_emoji from registration to participant if participant exists
-  if (registration.avatar_emoji) {
+  // Copy avatar_emoji and email from registration to participant if participant exists
+  if (registration.avatar_emoji || registration.email) {
     const { data: participants } = await insforge.database
       .from("participants")
       .select("id")
       .eq("roll", registration.roll)
       .limit(1);
     if (participants && participants.length > 0) {
+      const updates: Record<string, any> = {};
+      if (registration.avatar_emoji) updates.avatar_emoji = registration.avatar_emoji;
+      if (registration.email) updates.email = registration.email;
       await insforge.database
         .from("participants")
-        .update({ avatar_emoji: registration.avatar_emoji })
+        .update(updates)
         .eq("id", (participants[0] as any).id);
     }
   }

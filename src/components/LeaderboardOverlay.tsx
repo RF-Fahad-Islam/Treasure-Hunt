@@ -1,11 +1,13 @@
 import { useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { getAvatarUrl } from "@/lib/avatar";
 
 export type TeamStanding = {
   rank: number;
   team: string;
   score: number;
   you?: boolean;
+  avatarSeed?: string;
 };
 
 type Props = {
@@ -270,8 +272,11 @@ function PodiumColumn({
 
       {/* Podium block */}
       <div
-        className={`mt-2 flex w-full ${height} flex-col items-center justify-start overflow-hidden rounded-t-2xl px-2 pt-3 ring-1 ${accent.bg} ${accent.ring} ${accent.shadow}`}
+        className={`mt-2 flex w-full ${height} flex-col items-center justify-start overflow-hidden rounded-t-2xl px-2 pt-2 ring-1 ${accent.bg} ${accent.ring} ${accent.shadow}`}
       >
+        <div className="mb-1 h-8 w-8 overflow-hidden rounded-full border-2 sm:h-9 sm:w-9" style={{ borderColor: crown ? "#E0A800" : "rgba(255,255,255,0.4)" }}>
+          <img src={getAvatarUrl(standing.avatarSeed || standing.team, 36)} alt="" className="h-full w-full object-cover" />
+        </div>
         <div
           className={`text-center font-display text-[12px] font-extrabold leading-tight tracking-tight sm:text-[13px] ${accent.text}`}
         >
@@ -337,11 +342,8 @@ function ListRow({
         {standing.rank}
       </span>
 
-      <span
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-        style={{ background: color }}
-      >
-        <PersonIcon />
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ background: color }}>
+        <img src={getAvatarUrl(standing.avatarSeed || standing.team, 36)} alt="" className="h-full w-full object-cover" />
       </span>
 
       <span
@@ -409,17 +411,4 @@ function XIcon() {
   );
 }
 
-function PersonIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="12" cy="9" r="3.5" fill="white" />
-      <path
-        d="M4 20c1.5-4 5-5.5 8-5.5s6.5 1.5 8 5.5"
-        stroke="white"
-        strokeWidth="2"
-        strokeLinecap="round"
-        fill="none"
-      />
-    </svg>
-  );
-}
+

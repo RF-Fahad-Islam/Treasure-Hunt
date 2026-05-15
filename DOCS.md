@@ -25,8 +25,8 @@ npx @insforge/cli db migrations up --all
 ```
 VITE_INSFORGE_URL=https://<project>.insforge.app
 VITE_INSFORGE_ANON_KEY=<anon-key>
-VITE_ADMIN_PASSWORD=<admin-password>
 ```
+(Admin auth is DB-backed via `admins` table — no env var needed)
 
 ---
 
@@ -75,7 +75,7 @@ VITE_ADMIN_PASSWORD=<admin-password>
 | `/magic-login/:token` | Public           | MagicLogin         |
 | `/team`               | `team`           | TeamDashboard      |
 | `/spot-leader`        | `spot-leader`    | SpotLeader         |
-| `/admin`              | `admin`          | Admin              |
+| `/admin`              | `admin` / `spot-leader` | Admin (spot-leaders = read-only) |
 | `/results`            | Public           | Results            |
 
 Route protection uses two layers:
@@ -343,7 +343,7 @@ src/
 | ---- | ---------- | ---------- |
 | Team Leader | Name or Roll | 6-char Team Code |
 | Spot Leader | — | Spot Leader Code (e.g. `LIB-2026`) |
-| Admin | — | Admin Password (env var) |
+| Admin | — | `admins` table (username + password, DB-backed) |
 
 Team login checks `is_leader = true` — only the designated leader can log in.
 
@@ -398,7 +398,7 @@ Team login checks `is_leader = true` — only the designated leader can log in.
 
 ### 5. Admin Panel (`/admin`)
 
-11-tab interface:
+11-tab interface (spot-leaders see 9 tabs — Config and Sessions are hidden):
 
 | Tab | Features |
 | --- | -------- |
@@ -414,6 +414,8 @@ Team login checks `is_leader = true` — only the designated leader can log in.
 | Registrations | Pending/approved lists, approve (copies to participants), delete |
 | Login Links | **Push email**: Load teams → send one-click login links to all participants. **Spot links**: Generate copyable magic URLs per spot leader |
 | Locations | Live team position map with active/inactive/disqualified statuses |
+
+**Spot-leader read-only mode**: All mutation forms/buttons are hidden (add, edit, delete, generate, deploy, approve, email, reset, disqualify). Config and Sessions tabs are removed. A "👁️ Read-Only Mode" banner is shown at the top.
 
 ### 6. Results (`/results`)
 
@@ -469,6 +471,7 @@ Team login checks `is_leader = true` — only the designated leader can log in.
 - [x] Broadcast announcements
 - [x] Session management with kick
 - [x] Team disqualify/reinstate
+- [x] Spot-leader read-only admin access (hide mutations, no config/sessions tabs)
 
 ### Polishing
 - [x] Dark/light theme (Duolingo light, cyber-neon dark)
@@ -477,7 +480,7 @@ Team login checks `is_leader = true` — only the designated leader can log in.
 - [x] Confetti celebration on clue completion + results
 - [x] Animated score counters
 - [x] Success overlay with points + rank
-- [x] Pull-to-refresh on team dashboard
+- [x] iOS-style pull-to-refresh (interactive SVG ring, content follows finger, spring-back)
 - [x] PWA support (installable, offline page, service worker)
 - [x] Mobile-first design with large touch targets
 - [x] Animated page transitions
@@ -538,7 +541,7 @@ Team login checks `is_leader = true` — only the designated leader can log in.
 | `loginByRoll(roll, teamCode)` | Full team login by roll + code |
 | `loginTeam(identifier, teamCode)` | Team login by name + code |
 | `loginSpotLeader(username, code)` | Spot leader login by leader code |
-| `loginAdmin(username, password)` | Admin login by env password |
+| `loginAdmin(username, password)` | Admin login via `admins` table (DB-backed) |
 | `validateSession(token)` | Checks session `is_active` in DB |
 | `deactivateSession(token)` | Logs out a session |
 | `fetchActiveSessions()` | (Admin) all active sessions with user names |
@@ -673,7 +676,7 @@ Team login checks `is_leader = true` — only the designated leader can log in.
 | `ConfirmDialog` | Reusable confirmation modal |
 | `Confetti` | Canvas confetti celebration |
 | `CountUp` | Animated number counter |
-| `PullToRefresh` | Pull-to-refresh gesture wrapper |
+| `PullToRefresh` | iOS-style pull-to-refresh: SVG circular progress ring that fills as you pull, content follows finger with spring-back, "Pull to refresh" → "Release to refresh" text, spinning indicator on refresh |
 | `Backdrop` | Animated background ambience |
 | `AvatarEditModal` | Color picker (10 colors) + emoji grid (30) with live preview |
 | `NotificationBell` | Bell icon with unread badge, dropdown panel, "Mark all read" button |
@@ -689,7 +692,7 @@ Team login checks `is_leader = true` — only the designated leader can log in.
 | `@insforge/sdk` over raw Supabase | InsForge backend doesn't expose `/rest/v1/` endpoints |
 | Custom sessions (Zustand + localStorage) | Teams auth by roll/code, not email/password |
 | Spot leader auth via `spot_leader_code` | No separate `spot_leaders` table needed |
-| Admin auth via env var | Simple password guard, no DB required |
+| Admin auth via DB `admins` table | Secure multi-admin support; avoids env var leaks |
 | `team_routes` as dual-purpose | Route ordering + per-clue progress in one table |
 | First participant = team leader | Auto-assigned during generation |
 | InsForge WebSocket realtime | Instant leaderboard via DB trigger |
@@ -774,6 +777,31 @@ npx @insforge/cli db migrations up --all
   - **Team push email**: Load all team participants with emails → generate unique tokens → send personalized one-click login links via email
   - **Spot leader links**: Generate and copy magic URLs per spot (one-click login for each spot leader)
 - Tokens are 64-char random hex, single-use, expire in 7 days
+
+### iOS-Style Pull-to-Refresh
+- **File**: `src/components/PullToRefresh.tsx`
+- State-driven pull distance (`setPull`) for real-time UI updates during drag (old ref-based approach never re-rendered)
+- Content translates downward with `translateY(pull * 0.4)` and springs back via `cubic-bezier(0.32, 0.94, 0.6, 1)`
+- SVG circular progress ring fills stroke-dasharray proportionally to pull distance; rotates as you pull
+  - At 80px threshold: ring turns green, text switches from "Pull to refresh" → "Release to refresh"
+- Refreshing state: spinning SVG indicator (CSS `@keyframes ptr-spin`), 48px height
+- Three states: `pulling` → `ready` → `refreshing`
+
+### Admin Auth — DB-Backed (No Env Var)
+- **Migration**: `migrations/20260515230003_create-admins-table.sql`
+- `admins` table stores username + password for multi-admin support
+- `loginAdmin()` in `src/services/auth.ts` now queries the `admins` table instead of comparing against `VITE_ADMIN_PASSWORD`
+- `VITE_ADMIN_PASSWORD` fully removed from `.env.local`, `vite-env.d.ts`, and all docs
+- Default admin credentials: username `admin`, password `iamfahad@97`
+
+### Spot Leader Read-Only Admin Access
+- **Files**: `src/components/auth/ProtectedRoute.tsx`, `src/routes/Router.tsx`, `src/pages/Admin/index.tsx`
+- `ProtectedRoute` now accepts `role: Role | Role[]`
+- `/admin` route allows both `"admin"` and `"spot-leader"` roles
+- `readOnly` mode detected from `session.role === "spot-leader"`:
+  - "👁️ Read-Only Mode" banner at top of admin panel
+  - Config and Sessions tabs filtered out entirely
+  - All mutation UI hidden: Reset All, Add/Edit/Delete buttons (participants, teams, spots, clues, registrations), Generate/Save Teams, Deploy Route, Broadcast form, Login link generate/email buttons
 
 ---
 

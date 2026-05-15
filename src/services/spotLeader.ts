@@ -12,13 +12,63 @@ export interface ArrivingTeam {
   clueText: string;
   clueStartedAt: string | null;
   timeElapsedMinutes: number;
-  fullRoute: { spotName: string; status: string; isCurrent: boolean }[];
+  fullRoute: { 
+    spotId: string;
+    spotName: string; 
+    status: string; 
+    isCurrent: boolean;
+    arrivalApproved: boolean;
+    miniGamePlayed: boolean;
+    hasMiniGame: boolean;
+  }[];
+  /** Level-1 */
+  arrivalApproved: boolean;
+  arrivalApprovedAt: string | null;
+  arrivalPoints: number;
+  /** Level-2 */
+  miniGameStarted: boolean;
+  miniGameStartedAt: string | null;
+  miniGameScore: number | null;
+  miniGamePlayed: boolean;
+  /** Detailed info */
+  teamCode: string;
+  totalPoints: number;
+  totalPenaltySeconds: number;
+  huntCompleted: boolean;
+  participants: {
+    id: string;
+    name: string;
+    roll: string;
+    isLeader: boolean;
+    avatarEmoji: string;
+    avatarColor: string;
+  }[];
+}
+
+export interface Broadcast {
+  id: string;
+  sender_name: string;
+  sender_role: string;
+  message: string;
+  created_at: string;
 }
 
 export interface SpotLeaderData {
   spot: Spot;
   arrivingTeams: ArrivingTeam[];
+  allTeams: ArrivingTeam[];
+  /** Global read-only data */
+  globalSpots: Spot[];
+  globalClues: ClueDefinition[];
+  leaderboard: { teamName: string; points: number; completed: boolean }[];
+  broadcasts: Broadcast[];
 }
+
+/* Mini-game points options: 10-100 in steps of 10 */
+export const MINI_GAME_POINTS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100] as const;
+
+/** Points awarded at Level-1 (spot arrival) */
+export const ARRIVAL_POINTS = 1000;
 
 /* ─── Fetch spot leader data ─────────────────────────────────── */
 
@@ -30,24 +80,24 @@ export async function fetchSpotLeaderData(spotId: string): Promise<SpotLeaderDat
     .single();
 
   if (spotRes.error) throw new Error(spotRes.error.message);
-  const spot = spotRes.data as Spot;
 
   const teamsAtSpot = await insforge.database
     .from("teams")
-    .select("id, name, current_clue_index")
-    .neq("hunt_completed", true);
+    .select("id, name, team_code, total_points, total_penalty_seconds, current_clue_index, hunt_completed")
+    .neq("is_disqualified", true);
 
   if (teamsAtSpot.error) throw new Error(teamsAtSpot.error.message);
   const teams = (teamsAtSpot.data ?? []) as Team[];
 
   const arriving: ArrivingTeam[] = [];
+  const allTeams: ArrivingTeam[] = [];
 
   for (const team of teams) {
     const currentIdx = team.current_clue_index ?? 0;
 
     const routeRes = await insforge.database
       .from("team_routes")
-      .select("id, clue_id, route_order, status, clue_started_at")
+      .select("id, clue_id, route_order, status, clue_started_at, arrival_approved, arrival_approved_at, arrival_points, mini_game_started, mini_game_started_at, mini_game_score, mini_game_played")
       .eq("team_id", team.id)
       .eq("route_order", currentIdx)
       .single();
@@ -64,30 +114,28 @@ export async function fetchSpotLeaderData(spotId: string): Promise<SpotLeaderDat
     if (clueRes.error || !clueRes.data) continue;
     const clue = clueRes.data as ClueDefinition;
 
-    if (clue.spot_id !== spotId) continue;
 
     const elapsed = route.clue_started_at
       ? Math.floor((Date.now() - new Date(route.clue_started_at).getTime()) / 60000)
       : 0;
 
-    // Fetch the full route for this team
+    // Fetch full route
     const fullRouteRes = await insforge.database
       .from("team_routes")
-      .select("route_order, status, clue_id")
+      .select("route_order, status, clue_id, arrival_approved, mini_game_played")
       .eq("team_id", team.id)
       .order("route_order");
 
     let fullRoute: ArrivingTeam["fullRoute"] = [];
     if (!fullRouteRes.error && fullRouteRes.data) {
-      // Map clue_id to spot name
       const clueIds = fullRouteRes.data.map((r: any) => r.clue_id);
       const allCluesRes = await insforge.database
         .from("clues")
         .select("id, spot_id")
         .in("id", clueIds);
-      
-      let spotIds: string[] = [];
+
       let clueToSpot: Record<string, string> = {};
+      let spotIds: string[] = [];
       if (!allCluesRes.error && allCluesRes.data) {
         clueToSpot = allCluesRes.data.reduce((acc: any, c: any) => ({ ...acc, [c.id]: c.spot_id }), {});
         spotIds = allCluesRes.data.map((c: any) => c.spot_id);
@@ -95,27 +143,52 @@ export async function fetchSpotLeaderData(spotId: string): Promise<SpotLeaderDat
 
       const allSpotsRes = await insforge.database
         .from("spots")
-        .select("id, name")
+        .select("id, name, has_mini_game")
         .in("id", spotIds);
 
       let spotNames: Record<string, string> = {};
+      let spotHasGame: Record<string, boolean> = {};
       if (!allSpotsRes.error && allSpotsRes.data) {
         spotNames = allSpotsRes.data.reduce((acc: any, s: any) => ({ ...acc, [s.id]: s.name }), {});
+        spotHasGame = allSpotsRes.data.reduce((acc: any, s: any) => ({ ...acc, [s.id]: !!s.has_mini_game }), {});
       }
 
       fullRoute = fullRouteRes.data.map((r: any) => {
         const sid = clueToSpot[r.clue_id];
         return {
+          spotId: sid,
           spotName: spotNames[sid] || "Unknown Spot",
           status: r.status,
-          isCurrent: r.route_order === route.route_order
+          isCurrent: r.route_order === currentIdx,
+          arrivalApproved: !!r.arrival_approved,
+          miniGamePlayed: !!r.mini_game_played,
+          hasMiniGame: spotHasGame[sid] || false,
         };
       });
     }
 
-    arriving.push({
+    const participantsRes = await insforge.database
+      .from("participants")
+      .select("id, name, roll, is_leader, avatar_emoji, avatar_color")
+      .eq("team_id", team.id);
+
+    const participants = (participantsRes.data ?? []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      roll: p.roll || "",
+      isLeader: !!p.is_leader,
+      avatarEmoji: p.avatar_emoji || "👤",
+      avatarColor: p.avatar_color || "#777",
+    }));
+
+    const teamData = {
       teamId: team.id,
       teamName: team.name,
+      teamCode: team.team_code,
+      totalPoints: team.total_points ?? 0,
+      totalPenaltySeconds: team.total_penalty_seconds ?? 0,
+      huntCompleted: !!team.hunt_completed,
+      participants,
       routeId: route.id,
       routeOrder: route.route_order,
       status: route.status ?? "unknown",
@@ -123,22 +196,124 @@ export async function fetchSpotLeaderData(spotId: string): Promise<SpotLeaderDat
       clueStartedAt: route.clue_started_at,
       timeElapsedMinutes: elapsed,
       fullRoute,
-    });
+      arrivalApproved: route.arrival_approved ?? false,
+      arrivalApprovedAt: route.arrival_approved_at ?? null,
+      arrivalPoints: route.arrival_points ?? 0,
+      miniGameStarted: route.mini_game_started ?? false,
+      miniGameStartedAt: route.mini_game_started_at ?? null,
+      miniGameScore: route.mini_game_score ?? null,
+      miniGamePlayed: route.mini_game_played ?? false,
+    };
+
+    allTeams.push(teamData);
+    if (clue.spot_id === spotId) {
+      arriving.push(teamData);
+    }
   }
 
-  return { spot, arrivingTeams: arriving };
+  // Fetch Global Data
+  const [spotsRes, cluesRes, leaderboardRes, broadcastsRes] = await Promise.all([
+    insforge.database.from("spots").select("*").order("name"),
+    insforge.database.from("clues").select("*").order("created_at"),
+    insforge.database.from("teams").select("name, total_points, hunt_completed").order("total_points", { ascending: false }),
+    insforge.database.from("broadcasts").select("*").order("created_at", { ascending: false }).limit(20)
+  ]);
+
+  return {
+    spot: spotRes.data as Spot,
+    arrivingTeams: arriving,
+    allTeams,
+    globalSpots: spotsRes.data ?? [],
+    globalClues: cluesRes.data ?? [],
+    leaderboard: (leaderboardRes.data ?? []).map((t: any) => ({
+      teamName: t.name,
+      points: t.total_points ?? 0,
+      completed: !!t.hunt_completed
+    })),
+    broadcasts: broadcastsRes.data ?? []
+  };
 }
 
-/* ─── Approve team ───────────────────────────────────────────── */
+/* ─── Broadcasts ─────────────────────────────────────────────── */
 
-export const MINI_GAME_POINTS = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60] as const;
+export async function broadcastMessage(message: string, audience: string = "all", senderName: string, role: string): Promise<void> {
+  const { error } = await insforge.database.from("broadcasts").insert([{
+    sender_name: senderName,
+    sender_role: role,
+    message: message,
+    audience: audience
+  }]);
 
-export async function approveTeam(
+  if (error) throw new Error(error.message);
+}
+
+export async function fetchBroadcasts(): Promise<Broadcast[]> {
+  const { data, error } = await insforge.database
+    .from("broadcasts")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(50);
+  
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+/* ─── Level 1: Approve Arrival (+1000 pts immediately) ──────── */
+
+export async function approveArrival(
+  routeId: string,
+  teamId: string
+): Promise<void> {
+  const teamRes = await insforge.database
+    .from("teams")
+    .select("total_points")
+    .eq("id", teamId)
+    .single();
+
+  if (teamRes.error) throw new Error("Team not found");
+  const currentPoints = (teamRes.data as any).total_points ?? 0;
+  const now = new Date().toISOString();
+
+  const r1 = await insforge.database
+    .from("team_routes")
+    .update({
+      arrival_approved: true,
+      arrival_approved_at: now,
+      arrival_points: ARRIVAL_POINTS,
+    })
+    .eq("id", routeId);
+
+  if (r1.error) throw new Error(r1.error.message);
+
+  const r2 = await insforge.database
+    .from("teams")
+    .update({ total_points: currentPoints + ARRIVAL_POINTS })
+    .eq("id", teamId);
+
+  if (r2.error) throw new Error(r2.error.message);
+}
+
+/* ─── Level 2a: Start Mini-Game Session ────────────────────────  */
+
+export async function startMiniGame(routeId: string): Promise<void> {
+  const { error } = await insforge.database
+    .from("team_routes")
+    .update({
+      mini_game_started: true,
+      mini_game_started_at: new Date().toISOString(),
+    })
+    .eq("id", routeId);
+
+  if (error) throw new Error(error.message);
+}
+
+/* ─── Level 2b: Award Mini-Game Points + advance to next clue ── */
+
+export async function completeMiniGame(
   routeId: string,
   teamId: string,
-  pointsPerClue: number = 100,
-  miniGamePoints?: number,
-  penaltyMinutes?: number
+  miniGamePoints: number,         // 10-100 or 0 for skip
+  penaltyMinutes: number = 0
 ): Promise<void> {
   const teamRes = await insforge.database
     .from("teams")
@@ -152,40 +327,42 @@ export async function approveTeam(
   const currentIdx = team.current_clue_index ?? 0;
   const currentPoints = team.total_points ?? 0;
   const currentPenalty = team.total_penalty_seconds ?? 0;
-  const penaltySec = (penaltyMinutes ?? 0) * 60;
-  const totalAward = pointsPerClue + (miniGamePoints ?? 0);
+  const penaltySec = penaltyMinutes * 60;
 
   const nextIdx = currentIdx + 1;
 
-  const routeRes = await insforge.database
+  const nextRouteRes = await insforge.database
     .from("team_routes")
     .select("route_order")
     .eq("team_id", teamId)
     .eq("route_order", nextIdx)
     .maybeSingle();
 
-  const hasNextClue = !routeRes.error && routeRes.data;
+  const hasNextClue = !nextRouteRes.error && nextRouteRes.data;
 
+  // Update current route as completed
   const r1 = await insforge.database
     .from("team_routes")
     .update({
       status: "completed",
-      points_awarded: pointsPerClue,
       approved_by_spot_leader: true,
       clue_solved_at: new Date().toISOString(),
-      mini_game_played: miniGamePoints !== undefined,
-      mini_game_points: miniGamePoints ?? null,
+      mini_game_played: true,
+      mini_game_points: miniGamePoints,
+      mini_game_score: miniGamePoints,
+      points_awarded: miniGamePoints, // base 100 already granted at level-1
       penalty_seconds: penaltySec,
     })
     .eq("id", routeId);
 
   if (r1.error) throw new Error(r1.error.message);
 
+  // Update team totals
   const r2 = await insforge.database
     .from("teams")
     .update({
       current_clue_index: nextIdx,
-      total_points: currentPoints + totalAward,
+      total_points: currentPoints + miniGamePoints,
       total_penalty_seconds: currentPenalty + penaltySec,
       hunt_completed: !hasNextClue,
     })
@@ -193,6 +370,7 @@ export async function approveTeam(
 
   if (r2.error) throw new Error(r2.error.message);
 
+  // Start next clue timer
   if (hasNextClue) {
     const r3 = await insforge.database
       .from("team_routes")
@@ -205,4 +383,15 @@ export async function approveTeam(
 
     if (r3.error) throw new Error(r3.error.message);
   }
+}
+
+/* ─── Legacy wrapper kept for compatibility ──────────────────── */
+export async function approveTeam(
+  routeId: string,
+  teamId: string,
+  _pointsPerClue: number = 100,
+  miniGamePoints?: number,
+  penaltyMinutes?: number
+): Promise<void> {
+  await completeMiniGame(routeId, teamId, miniGamePoints ?? 0, penaltyMinutes ?? 0);
 }

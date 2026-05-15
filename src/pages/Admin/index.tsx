@@ -37,7 +37,7 @@ import {
 } from "@/services/admin";
 import { fetchActiveSessions, adminDeactivateSession, generateLoginToken } from "@/services/auth";
 import type { SessionWithUser } from "@/services/auth";
-import type { Participant, Spot, ClueDefinition, EventConfig, Team, Registration } from "@/types";
+import type { Participant, Spot, ClueDefinition, EventConfig, Team, Registration, TeamRoute } from "@/types";
 
 import type { GeneratedTeam, TeamWithRoute } from "@/services/admin";
 
@@ -47,13 +47,15 @@ import { SpotMapPicker } from "@/components/SpotMapPicker";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useTeamLocationsRealtime } from "@/hooks/useTeamLocationsRealtime";
 import { disqualifyTeam, reinstateTeam, isActive } from "@/services/location";
-import { sendLoginEmail } from "@/lib/email";
 import { uploadClueImage } from "@/lib/storage";
 import {
   LayoutDashboard, Users, Building2, MapPin, Search,
   Settings, LogIn, Radio, ClipboardList, Link2, Globe,
   Crown, RefreshCw, Trash2, Route,
 } from "lucide-react";
+import { LiveFlowTracking } from "@/components/LiveFlowTracking";
+import { fetchAllDetailedTeams, type DetailedTeam } from "@/services/flow";
+import { broadcastMessage } from "@/services/spotLeader";
 
 type Tab = "dashboard" | "participants" | "teams" | "routes" | "spots" | "clues" | "config" | "sessions" | "broadcast" | "locations" | "registrations" | "login-links";
 
@@ -162,19 +164,18 @@ export default function AdminPage() {
   const [eventConfig, setEventConfig] = useState<EventConfig | null>(null);
   const [sessions, setSessions] = useState<SessionWithUser[]>([]);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [, setTeamRoutesData] = useState<TeamRoute[]>([]);
+  const [detailedTeams, setDetailedTeams] = useState<DetailedTeam[]>([]);
+  const [broadcasts, setBroadcasts] = useState<any[]>([]);
   const teamLocations = useTeamLocationsRealtime();
 
   /* ─── Login Links state ─── */
-  const [teamLinksData, setTeamLinksData] = useState<{ teamId: string; teamName: string; teamCode: string; leaderId: string; leaderName: string; leaderEmail: string; leaderRoll: string }[]>([]);
+  const [teamLinksData, setTeamLinksData] = useState<{ teamId: string; teamName: string; teamCode: string }[]>([]);
   const [teamLinks, setTeamLinks] = useState<Record<string, string>>({});
   const [linkLoading, setLinkLoading] = useState(false);
-  const [linkSending, setLinkSending] = useState(false);
-  const [linkResults, setLinkResults] = useState<{ ok: number; fail: number; errors: string[] } | null>(null);
   const [linkCopiedId, setLinkCopiedId] = useState<string | null>(null);
   const [spotLinks, setSpotLinks] = useState<{ id: string; name: string; url: string }[]>([]);
   const [spotLinkLoading, setSpotLinkLoading] = useState<string | null>(null);
-  const [sendingTeamId, setSendingTeamId] = useState<string | null>(null);
-  const [emailedTeamIds, setEmailedTeamIds] = useState<Set<string>>(new Set());
 
   /* ─── UI ─── */
   const [loading, setLoading] = useState(false);
@@ -191,7 +192,7 @@ export default function AdminPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [p, s, c, t, e, r] = await Promise.all([
+      const results = await Promise.allSettled([
         fetchAllParticipants(),
         fetchAllSpots(),
         fetchAllClues(),
@@ -199,21 +200,67 @@ export default function AdminPage() {
         fetchEventConfig(),
         fetchRegistrations(),
       ]);
-      setParticipants(p);
-      setSpots(s);
-      setSpotLinks(s.filter((sp: any) => sp.login_link_url).map((sp: any) => ({ id: sp.id, name: sp.name, url: sp.login_link_url })));
-      setClues(c);
-      setTeams(t);
-      setEventConfig(e);
-      setRegistrations(r);
+      const [pR, sR, cR, tR, eR, rR] = results;
+      if (pR.status === "fulfilled") setParticipants(pR.value);
+      if (sR.status === "fulfilled") {
+        setSpots(sR.value);
+        setSpotLinks(sR.value.filter((sp: any) => sp.login_link_url).map((sp: any) => ({ id: sp.id, name: sp.name, url: sp.login_link_url })));
+      }
+      if (cR.status === "fulfilled") setClues(cR.value);
+      if (tR.status === "fulfilled") setTeams(tR.value);
+      if (eR.status === "fulfilled") setEventConfig(eR.value);
+      if (rR.status === "fulfilled") setRegistrations(rR.value);
     } catch (err) {
       console.error(err);
-    } finally {
-      setLoading(false);
     }
+    try {
+      const { data: trs } = await insforge.database.from("team_routes").select("*").order("route_order");
+      setTeamRoutesData(trs ?? []);
+    } catch (err) { console.error(err); }
+    try {
+      const dt = await fetchAllDetailedTeams();
+      setDetailedTeams(dt);
+    } catch (err) { console.error(err); }
+    try {
+      const { data: brs } = await insforge.database.from("broadcasts").select("*").order("created_at", { ascending: false });
+      setBroadcasts(brs ?? []);
+    } catch (err) { console.error(err); }
+    setLoading(false);
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Background polling + Real-time for live updates
+  useEffect(() => {
+    let cancelled = false;
+    
+    async function setupRealtime() {
+      try {
+        await insforge.realtime.connect();
+        const sub = await insforge.realtime.subscribe("admin-progress");
+        if (!cancelled && sub.ok) {
+           // Standard database update events
+           insforge.realtime.on("teams_update", () => loadData());
+           insforge.realtime.on("team_routes_update", () => loadData());
+           // Custom event from spot leader approvals
+           insforge.realtime.on("progress_updated", () => loadData());
+        }
+      } catch (err) {
+        console.error("Admin realtime failed:", err);
+      }
+    }
+
+    setupRealtime();
+    const timer = setInterval(() => { void loadData(); }, 15000); // 15s fallback
+    
+    return () => {
+      cancelled = true;
+      insforge.realtime.off("teams_update", loadData);
+      insforge.realtime.off("team_routes_update", loadData);
+      insforge.realtime.off("progress_updated", loadData);
+      clearInterval(timer);
+    };
+  }, [loadData]);
 
   /* ─── Helpers ─── */
   function flash(msg: string) { console.log(msg); }
@@ -774,9 +821,110 @@ export default function AdminPage() {
             </div>
           )}
 
+          {/* Per-Team Gamified Route Progress */}
+          <div className="mt-8 pt-6 border-t-4" style={{ borderColor: "var(--border-soft)" }}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-[16px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-green)" }}>
+                🎯 Team Route Progress
+              </h3>
+              <span className="rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-wider" style={{ background: "rgba(88,204,2,0.1)", color: "#58CC02" }}>
+                {detailedTeams.filter(t => t.fullRoute.length > 0).length} teams
+              </span>
+            </div>
+            <div className="flex flex-col gap-5">
+              {detailedTeams.filter(t => t.fullRoute.length > 0).map(team => {
+                const route = team.fullRoute;
+                const completed = route.filter(s => ["completed","revealed","solved"].includes(s.status || "")).length;
+                return (
+                  <motion.div
+                    key={team.teamId}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-3xl p-5 border-4 transition-all hover:shadow-md"
+                    style={{ borderColor: "var(--border-soft)", background: "var(--surface)" }}
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-[16px] shadow-sm shrink-0" style={{ background: team.huntCompleted ? "linear-gradient(135deg, #FFC800, #F59E0B)" : "linear-gradient(135deg, #58CC02, #3A8400)" }}>
+                          {team.teamName.charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[15px] font-black truncate" style={{ color: "var(--fg)" }}>{team.teamName}</p>
+                          <p className="text-[11px] font-extrabold uppercase tracking-wider" style={{ color: "var(--fg-muted)" }}>
+                            #{team.teamCode} · {team.totalPoints} pts{team.huntCompleted ? " · 👑 Complete" : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 ml-3">
+                        <span className="text-[18px] font-black" style={{ color: "var(--color-brand-green)" }}>{completed}/{route.length}</span>
+                        <p className="text-[9px] font-black uppercase tracking-tight" style={{ color: "var(--fg-muted)" }}>Spots Cleared</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-0 overflow-x-auto pb-1 scrollbar-hide">
+                      {route.map((step, idx) => {
+                        const isCompleted = ["completed","revealed","solved"].includes(step.status || "");
+                        const isCurrent = step.isCurrent;
+                        const stepLabel = isCompleted ? "🏆" : isCurrent ? "🎯" : "🔒";
+                        const stepColor = isCompleted ? "#58CC02" : isCurrent ? "#1CB0F6" : "var(--fg-muted)";
+                        const stepBg = isCompleted ? "#58CC02" : isCurrent ? "#1CB0F6" : "var(--surface)";
+                        const stepBc = isCompleted ? "#46A302" : isCurrent ? "#0f7ac0" : "var(--border-soft)";
+                        return (
+                          <div key={idx} className="flex items-center gap-0">
+                            <div className="flex flex-col items-center min-w-[84px]">
+                              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-[14px] font-black border-[3px] transition-all shrink-0"
+                                style={{
+                                  background: stepBg,
+                                  borderColor: stepBc,
+                                  color: isCompleted || isCurrent ? "white" : "var(--fg-muted)",
+                                  boxShadow: isCurrent ? "0 0 0 5px rgba(28,176,246,0.18)" : "none",
+                                }}
+                              >
+                                {stepLabel}
+                              </div>
+                              <p className="mt-1.5 text-[9px] font-black uppercase truncate max-w-[74px] text-center leading-tight"
+                                style={{ color: stepColor }}>
+                                {isCompleted || isCurrent ? step.spotName : "🔒"}
+                              </p>
+                              <div className="mt-1 flex items-center gap-1">
+                                <span className="text-[9px]" style={{ opacity: step.arrivalApproved ? 1 : 0.25 }}>📍</span>
+                                {step.hasMiniGame && (
+                                  <span className="text-[9px]" style={{ opacity: step.miniGamePlayed ? 1 : 0.25 }}>🎮</span>
+                                )}
+                              </div>
+                            </div>
+                            {idx < route.length - 1 && (
+                              <div className="w-5 h-[3px] rounded-full mx-0.5 shrink-0"
+                                style={{
+                                  background: isCompleted ? "#58CC02" : isCurrent ? "#1CB0F6" : "var(--border-soft)",
+                                  opacity: isCompleted ? 1 : 0.35,
+                                }}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                );
+              })}
+              {detailedTeams.filter(t => t.fullRoute.length > 0).length === 0 && (
+                <p className="text-[13px] italic opacity-60 text-center py-6" style={{ color: "var(--fg-muted)" }}>No route plans deployed yet. Use the Route Plan Creator above.</p>
+              )}
+            </div>
+          </div>
+
           <div className="mt-12 pt-8 border-t-4" style={{ borderColor: "var(--border-soft)" }}>
-            <h3 className="mb-6 text-[15px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-blue)" }}>🏠 All Teams Status</h3>
-            {renderTeamList()}
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-[15px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-blue)" }}>🎮 Live Tracking Flow</h3>
+              <button 
+                onClick={loadData}
+                className="btn-press rounded-xl p-2.5 bg-white shadow-sm border-2 border-gray-100 hover:border-blue-400 transition-all"
+              >
+                <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+              </button>
+            </div>
+            
+            <LiveFlowTracking teams={detailedTeams as any} />
           </div>
         </div>
       </div>
@@ -1270,20 +1418,17 @@ export default function AdminPage() {
 
   async function handleSendBroadcast() {
     if (!broadcastMsg.trim()) return;
-    setConfirmDef({ title: "Send Broadcast", message: `Send this message to ${broadcastAudience === "all" ? "everyone" : broadcastAudience === "spot-leaders" ? "all spot leaders" : "all teams"}?` });
+    setConfirmDef({ 
+      title: "Send Broadcast", 
+      message: `Send this message to ${broadcastAudience === "all" ? "everyone" : broadcastAudience === "spot-leaders" ? "all spot leaders" : "all teams"}?` 
+    });
     setConfirmHandler(() => async () => {
       setBroadcastSending(true);
       try {
-        await insforge.realtime.connect();
-        await insforge.realtime.publish("broadcast", "new_broadcast", {
-          id: crypto.randomUUID(),
-          message: broadcastMsg.trim(),
-          audience: broadcastAudience,
-          sender: "Admin",
-          timestamp: new Date().toISOString(),
-        });
+        await broadcastMessage(broadcastMsg.trim(), broadcastAudience, "Admin", "admin");
         flash("📢 Broadcast sent!");
         setBroadcastMsg("");
+        await loadData();
       } catch {
         flashError("Broadcast failed");
       } finally {
@@ -1294,66 +1439,108 @@ export default function AdminPage() {
 
   function renderBroadcast() {
     return (
-      <div className="card p-6 max-w-2xl relative overflow-hidden" style={{ background: "var(--surface)", borderTop: "4px solid var(--color-brand-blue)" }}>
-        <div className="mb-6 flex items-center gap-3">
-          <span className="text-2xl">📢</span>
-          <div>
-            <h3 className="text-[15px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-blue)" }}>
-              Send Broadcast
-            </h3>
-            <p className="mt-0.5 text-[13px] font-semibold" style={{ color: "var(--fg-muted)" }}>
-              Message will appear instantly on all matching screens.
-            </p>
+      <div className="flex flex-col lg:flex-row gap-8">
+        <div className="card p-8 flex-1 relative overflow-hidden" style={{ background: "var(--surface)", borderTop: "6px solid var(--color-brand-blue)" }}>
+          <div className="mb-6 flex items-center gap-3">
+            <Radio className="h-6 w-6" style={{ color: "var(--color-brand-blue)" }} />
+            <div>
+              <h3 className="text-[16px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-blue)" }}>
+                Broadcast Center
+              </h3>
+              <p className="mt-0.5 text-[13px] font-semibold" style={{ color: "var(--fg-muted)" }}>
+                Send instant announcements to all participants.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-6">
+            <div>
+              <label className="mb-2 block text-[12px] font-black uppercase tracking-wide" style={{ color: "var(--fg-muted)" }}>
+                🎯 Target Audience
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {([["all", "Everyone"], ["spot-leaders", "Spot Leaders"], ["teams", "Teams"]] as const).map(
+                  ([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => setBroadcastAudience(value)}
+                      className={`btn-press rounded-[20px] px-6 py-3.5 text-[14px] font-black uppercase tracking-wide transition-all border-4 ${broadcastAudience === value ? "text-white" : ""}`}
+                      style={{ 
+                        background: broadcastAudience === value ? "var(--color-brand-blue)" : "var(--surface)", 
+                        borderColor: broadcastAudience === value ? "var(--color-brand-blue-dark)" : "var(--border-soft)", 
+                        color: broadcastAudience === value ? "white" : "var(--fg-muted)",
+                        boxShadow: broadcastAudience === value ? "0 6px 0 0 var(--color-brand-blue-dark)" : "0 6px 0 0 rgba(0,0,0,0.1)"
+                      }}
+                    >
+                      {label}
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-[12px] font-black uppercase tracking-wide" style={{ color: "var(--fg-muted)" }}>
+                📝 Announcement Message
+              </label>
+              <textarea
+                value={broadcastMsg}
+                onChange={(e) => setBroadcastMsg(e.target.value)}
+                placeholder="Attention everyone, the hunt is about to begin! 🚀"
+                rows={5}
+                className="w-full rounded-[28px] border-4 px-6 py-5 text-[18px] font-black outline-none resize-none transition-all focus:border-[var(--color-brand-blue)]"
+                style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }}
+              />
+            </div>
+
+            <button
+              onClick={handleSendBroadcast}
+              data-sound="confirm"
+              disabled={broadcastSending || !broadcastMsg.trim()}
+              className="btn-press ripple rounded-[28px] px-10 py-6 text-[18px] font-black uppercase tracking-wide text-white transition-all shadow-lg"
+              style={{
+                background: "var(--color-brand-blue)",
+                boxShadow: "0 8px 0 0 var(--color-brand-blue-dark)",
+                opacity: broadcastSending || !broadcastMsg.trim() ? 0.5 : 1,
+              }}
+            >
+              {broadcastSending ? "⏳ Sending..." : "📢 Emit Broadcast"}
+            </button>
           </div>
         </div>
 
-        <div className="flex flex-col gap-5">
-          <div>
-            <label className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-wide" style={{ color: "var(--fg-muted)" }}>
-              Audience
-            </label>
-            <div className="flex gap-2">
-              {([["all", "🌐 All"], ["spot-leaders", "📍 Spot Leaders"], ["teams", "🏃 Teams"]] as const).map(
-                ([value, label]) => (
-                  <button
-                    key={value}
-                    onClick={() => setBroadcastAudience(value)}
-                    className={`flex-1 btn-press ripple rounded-[20px] px-6 py-4 text-[14px] font-black uppercase tracking-wide transition-all border-4 ${broadcastAudience === value ? "text-white" : ""}`}
-                    style={{ background: broadcastAudience === value ? "var(--color-brand-blue)" : "var(--surface)", borderColor: broadcastAudience === value ? "var(--color-brand-blue-dark)" : "var(--border-soft)", color: broadcastAudience === value ? "white" : "var(--fg-muted)" }}
-                  >
-                    {label}
-                  </button>
-                )
+        <div className="lg:w-[400px] flex flex-col gap-6">
+          <div className="card p-8 flex-1" style={{ background: "var(--surface)", borderTop: "6px solid var(--color-brand-gold)" }}>
+            <h3 className="mb-6 text-[15px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-gold)" }}>
+              📻 Recent Activity
+            </h3>
+            <div className="flex flex-col gap-4 max-h-[600px] overflow-y-auto pr-2 admin-tabs-container">
+              {broadcasts.length === 0 ? (
+                <div className="py-20 text-center opacity-30">
+                  <Radio size={48} className="mx-auto mb-4" />
+                  <p className="font-black uppercase tracking-widest text-[11px]">No history yet</p>
+                </div>
+              ) : (
+                broadcasts.map((b) => (
+                  <div key={b.id} className="rounded-2xl border-4 p-4" style={{ background: "var(--border-soft)", borderColor: "transparent" }}>
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-[11px] font-black uppercase px-2 py-0.5 rounded-lg" style={{ background: b.sender_role === 'admin' ? 'var(--color-brand-gold)' : 'var(--color-brand-blue)', color: '#fff' }}>
+                        {b.sender_name}
+                      </span>
+                      <span className="text-[10px] font-bold opacity-50">
+                        {new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <p className="text-[14px] font-black leading-tight" style={{ color: "var(--fg)" }}>{b.message}</p>
+                    <div className="mt-2 flex items-center gap-1 opacity-40">
+                      <Globe size={10} />
+                      <span className="text-[9px] font-black uppercase tracking-tighter">Target: {b.audience}</span>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </div>
-          <div>
-            <label className="mb-2 block text-[13px] font-black uppercase tracking-wide" style={{ color: "var(--fg-muted)" }}>
-              Message
-            </label>
-
-            <textarea
-              value={broadcastMsg}
-              onChange={(e) => setBroadcastMsg(e.target.value)}
-              placeholder="Type your announcement…"
-              rows={4}
-              className="w-full rounded-[24px] border-4 px-6 py-4 text-[18px] font-black outline-none resize-none"
-              style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }}
-            />
-          </div>
-          <button
-            onClick={handleSendBroadcast}
-            data-sound="confirm"
-            disabled={broadcastSending || !broadcastMsg.trim()}
-            className="btn-press ripple rounded-[24px] px-10 py-6 text-[18px] font-black uppercase tracking-wide text-white transition-all shadow-[0_8px_0_0_#5b21b6]"
-            style={{
-              background: "linear-gradient(135deg, #7c3aed, #a78bfa)",
-              opacity: broadcastSending || !broadcastMsg.trim() ? 0.5 : 1,
-            }}
-          >
-            {broadcastSending ? "⏳ Sending…" : "📢 Send Broadcast Now"}
-          </button>
-
         </div>
       </div>
     );
@@ -1520,50 +1707,21 @@ export default function AdminPage() {
     setLinkLoading(true);
     setTeamLinks({});
     try {
-      const { data: participants, error: pErr } = await insforge.database
-        .from("participants")
-        .select("id, name, roll, email, team_id, is_leader")
-        .not("team_id", "is", null);
+      const { data: teams, error: tErr } = await insforge.database
+        .from("teams")
+        .select("id, name, team_code");
 
-      if (pErr) throw new Error(pErr.message);
-      if (!participants || participants.length === 0) {
+      if (tErr) throw new Error(tErr.message);
+      if (!teams || teams.length === 0) {
         setTeamLinksData([]);
         return;
       }
 
-      const teamIds = [...new Set((participants as any[]).map((p) => p.team_id))];
-      const { data: teams, error: tErr } = await insforge.database
-        .from("teams")
-        .select("id, name, team_code")
-        .in("id", teamIds);
-
-      if (tErr) throw new Error(tErr.message);
-      const teamMap = new Map((teams ?? []).map((t: any) => [t.id, t]));
-
-      const teamMap2 = new Map<string, { teamId: string; teamName: string; teamCode: string; leaderId: string; leaderName: string; leaderEmail: string; leaderRoll: string }>();
-      for (const p of participants as any[]) {
-        const t = teamMap.get(p.team_id);
-        if (!t) continue;
-        if (!teamMap2.has(p.team_id)) {
-          teamMap2.set(p.team_id, {
-            teamId: p.team_id,
-            teamName: t.name,
-            teamCode: t.team_code,
-            leaderId: p.id,
-            leaderName: p.name,
-            leaderEmail: p.email ?? "",
-            leaderRoll: p.roll ?? "",
-          });
-        } else if (p.is_leader) {
-          const entry = teamMap2.get(p.team_id)!;
-          entry.leaderId = p.id;
-          entry.leaderName = p.name;
-          entry.leaderEmail = p.email ?? "";
-          entry.leaderRoll = p.roll ?? "";
-        }
-      }
-
-      setTeamLinksData([...teamMap2.values()].filter((e) => e.leaderEmail));
+      setTeamLinksData((teams as any[]).map(t => ({
+        teamId: t.id,
+        teamName: t.name,
+        teamCode: t.team_code,
+      })));
     } catch {
       flashError("Failed to load team data");
     } finally {
@@ -1587,47 +1745,6 @@ export default function AdminPage() {
     }
   }
 
-  async function handleSendTeamLoginLinks() {
-    const recipientCount = teamLinksData.length;
-    setConfirmDef({
-      title: "Send Login Links",
-      message: `Send magic login emails to team leaders (${recipientCount})? Links will be auto-generated first.`,
-    });
-    setConfirmHandler(() => async () => {
-      setLinkSending(true);
-      setLinkResults(null);
-      const errors: string[] = [];
-      let ok = 0;
-
-      for (const team of teamLinksData) {
-        let loginUrl = teamLinks[team.teamId];
-        if (!loginUrl) {
-          try {
-            const token = await generateLoginToken("team", team.teamId, {
-              teamCode: team.teamCode,
-              targetIsTeam: true,
-            });
-            loginUrl = `${window.location.origin}/magic-login/${token}`;
-            setTeamLinks((prev) => ({ ...prev, [team.teamId]: loginUrl }));
-          } catch (err) {
-            errors.push(`${team.teamName}: ${err instanceof Error ? err.message : "Failed to generate"}`);
-            continue;
-          }
-        }
-
-        const emailErr = await sendLoginEmail(team.leaderName, team.leaderEmail, team.teamName, team.teamCode, loginUrl);
-        if (emailErr) {
-          errors.push(`${team.leaderName} (${team.leaderEmail}): ${emailErr}`);
-        } else {
-          ok++;
-        }
-      }
-
-      setLinkResults({ ok, fail: errors.length, errors });
-      setLinkSending(false);
-      flash(`Sent ${ok} emails`);
-    });
-  }
 
   async function handleGenerateSpotLink(spotId: string, spotName: string) {
     setSpotLinkLoading(spotId);
@@ -1673,153 +1790,83 @@ export default function AdminPage() {
               className="btn-press rounded-2xl px-6 py-3 text-[13px] font-black uppercase tracking-wide transition-all"
               style={{ background: "var(--border-soft)", color: "var(--fg-muted)" }}
             >
-              {linkLoading ? "⏳ Loading…" : `🔄 Load Teams (${teamLinksData.length || "?"})`}
+              {linkLoading ? "⏳ Loading…" : `🔄 Load Teams`}
             </button>
 
             {teamLinksData.length > 0 && (
-              <>
-                <button
-                  onClick={handleGenerateAllTeamLinks}
-                  className="btn-press rounded-2xl px-6 py-3 text-[13px] font-black uppercase tracking-wide transition-all"
-                  style={{ background: "var(--color-brand-blue)", color: "#fff" }}
-                >
-                  🔗 Generate All
-                </button>
-
-                <button
-                  onClick={handleSendTeamLoginLinks}
-                  disabled={linkSending}
-                  className="btn-press rounded-2xl px-8 py-3 text-[13px] font-black uppercase tracking-wide text-white transition-all"
-                  style={{ background: "var(--color-brand-green)", opacity: linkSending ? 0.6 : 1 }}
-                >
-                  {linkSending ? "⏳ Sending…" : "📧 Email All"}
-                </button>
-              </>
+              <button
+                onClick={handleGenerateAllTeamLinks}
+                className="btn-press rounded-2xl px-6 py-3 text-[13px] font-black uppercase tracking-wide transition-all"
+                style={{ background: "var(--color-brand-blue)", color: "#fff" }}
+              >
+                🔗 Generate All
+              </button>
             )}
           </div>
 
-          {linkResults && (
-            <div className="mt-6 rounded-3xl border-4 p-6" style={{ borderColor: linkResults.fail > 0 ? "rgba(255,75,75,0.2)" : "rgba(88,204,2,0.2)", background: linkResults.fail > 0 ? "rgba(255,75,75,0.05)" : "rgba(88,204,2,0.05)" }}>
-              <p className="text-[15px] font-black" style={{ color: linkResults.fail > 0 ? "var(--color-brand-red)" : "var(--color-brand-green)" }}>
-                ✅ {linkResults.ok} sent {linkResults.fail > 0 ? `· ❌ ${linkResults.fail} failed` : ""}
-              </p>
-              {linkResults.errors.length > 0 && (
-                <div className="mt-3 max-h-32 overflow-y-auto space-y-1">
-                  {linkResults.errors.map((e, i) => (
-                    <p key={i} className="text-[12px] font-semibold" style={{ color: "var(--color-brand-red)" }}>{e}</p>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
           {teamLinksData.length > 0 && (
-            <div className="mt-6 space-y-3">
+            <div className="grid gap-3">
               {teamLinksData.map((t) => {
                 const link = teamLinks[t.teamId];
                 const isCopied = linkCopiedId === t.teamId;
-                const isSending = sendingTeamId === t.teamId;
                 return (
                   <div key={t.teamId}
-                    className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl px-5 py-4 transition-all"
-                    style={{
-                      background: isCopied ? "rgba(88,204,2,0.1)" : "var(--border-soft)",
-                      border: isCopied ? "2px solid rgba(88,204,2,0.3)" : "2px solid transparent",
-                    }}
+                    className="flex items-center gap-4 rounded-2xl px-5 py-4 transition-all"
+                    style={{ background: "var(--border-soft)" }}
                   >
-                    <div
-                      onClick={async () => {
-                        let url = teamLinks[t.teamId];
-                        if (!url) {
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[15px] font-black" style={{ color: "var(--fg)" }}>{t.teamName}</span>
+                      <p className="text-[11px] font-bold opacity-60" style={{ color: "var(--fg-muted)" }}>
+                        Code: {t.teamCode}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {link ? (
+                        <>
+                          <input readOnly value={link}
+                            className="w-36 sm:w-48 rounded-xl border-2 px-3 py-2 text-[12px] font-mono font-bold outline-none truncate"
+                            style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }}
+                            onClick={(e) => (e.target as HTMLInputElement).select()} />
+                          <button onClick={() => copyToClipboard(link, t.teamId)}
+                            className="btn-press rounded-xl px-3 py-2 text-[12px] font-extrabold uppercase tracking-wide transition-all"
+                            style={{ background: isCopied ? "var(--color-brand-green)" : "var(--surface)", color: isCopied ? "#fff" : "var(--fg)" }}>
+                            {isCopied ? "✅" : "📋"}
+                          </button>
+                          <button onClick={async () => {
+                            try {
+                              const token = await generateLoginToken("team", t.teamId, {
+                                teamCode: t.teamCode,
+                                targetIsTeam: true,
+                              });
+                              const url = `${window.location.origin}/magic-login/${token}`;
+                              setTeamLinks((prev) => ({ ...prev, [t.teamId]: url }));
+                            } catch {
+                              flashError("Failed to generate link");
+                            }
+                          }}
+                            className="btn-press rounded-xl px-3 py-2 text-[11px] font-extrabold uppercase tracking-wide transition-all"
+                            style={{ background: "rgba(28,176,246,0.12)", color: "var(--color-brand-blue)" }}>
+                            🔄
+                          </button>
+                        </>
+                      ) : (
+                        <button onClick={async () => {
                           try {
                             const token = await generateLoginToken("team", t.teamId, {
                               teamCode: t.teamCode,
                               targetIsTeam: true,
                             });
-                            url = `${window.location.origin}/magic-login/${token}`;
+                            const url = `${window.location.origin}/magic-login/${token}`;
                             setTeamLinks((prev) => ({ ...prev, [t.teamId]: url }));
                           } catch {
                             flashError("Failed to generate link");
-                            return;
                           }
-                        }
-                        await navigator.clipboard.writeText(url).catch(() => {});
-                        setLinkCopiedId(t.teamId);
-                        setTimeout(() => setLinkCopiedId(null), 2000);
-                      }}
-                      className="flex-1 min-w-0 cursor-pointer select-none"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-[15px] font-black" style={{ color: "var(--fg)" }}>{t.teamName}</span>
-                        <span className="text-[11px] font-semibold" style={{ color: "var(--fg-muted)" }}>· {t.leaderName}</span>
-                      </div>
-                      <p className="text-[11px] font-bold opacity-60" style={{ color: "var(--fg-muted)" }}>
-                        {t.leaderEmail}
-                      </p>
-                    </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[12px] font-extrabold uppercase cursor-pointer select-none"
-                        style={{ color: isCopied ? "var(--color-brand-green)" : "var(--color-brand-blue)" }}
-                        onClick={async () => {
-                          let url = teamLinks[t.teamId];
-                          if (!url) {
-                            try {
-                              const token = await generateLoginToken("team", t.teamId, {
-                                teamCode: t.teamCode,
-                                targetIsTeam: true,
-                              });
-                              url = `${window.location.origin}/magic-login/${token}`;
-                              setTeamLinks((prev) => ({ ...prev, [t.teamId]: url }));
-                            } catch {
-                              flashError("Failed to generate link");
-                              return;
-                            }
-                          }
-                          await navigator.clipboard.writeText(url).catch(() => {});
-                          setLinkCopiedId(t.teamId);
-                          setTimeout(() => setLinkCopiedId(null), 2000);
-                        }}>
-                        {isCopied ? "✅ Copied!" : link ? "📋 Copy" : "🔗 Generate"}
-                      </span>
-                      {emailedTeamIds.has(t.teamId) && (
-                        <span className="text-[11px] font-extrabold uppercase" style={{ color: "var(--color-brand-green)" }}>
-                          ✅ Sent
-                        </span>
-                      )}
-                      <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          setSendingTeamId(t.teamId);
-                          let url = teamLinks[t.teamId];
-                          if (!url) {
-                            try {
-                              const token = await generateLoginToken("team", t.teamId, {
-                                teamCode: t.teamCode,
-                                targetIsTeam: true,
-                              });
-                              url = `${window.location.origin}/magic-login/${token}`;
-                              setTeamLinks((prev) => ({ ...prev, [t.teamId]: url }));
-                            } catch {
-                              flashError("Failed to generate link");
-                              setSendingTeamId(null);
-                              return;
-                            }
-                          }
-                          const emailErr = await sendLoginEmail(t.leaderName, t.leaderEmail, t.teamName, t.teamCode, url);
-                          if (emailErr) {
-                            flashError(`${t.teamName}: ${emailErr}`);
-                          } else {
-                            setEmailedTeamIds((prev) => new Set(prev).add(t.teamId));
-                            flash(`✅ Email sent to ${t.leaderName}`);
-                          }
-                          setSendingTeamId(null);
                         }}
-                        disabled={isSending}
-                        className="rounded-xl px-3 py-2 text-[12px] font-extrabold uppercase tracking-wide transition-all shrink-0 disabled:opacity-50"
-                        style={{ background: "var(--color-brand-green)", color: "#fff" }}
-                      >
-                        {isSending ? "⏳" : "📧 Email"}
-                      </button>
+                          className="btn-press rounded-2xl px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide transition-all"
+                          style={{ background: "var(--color-brand-blue)", color: "#fff" }}>
+                          🔗 Generate
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import { CountUp } from "@/components/CountUp";
+import { getAvatarUrl } from "@/lib/avatar";
 import type { LeaderboardEntry } from "@/services/team";
 
 interface Props {
@@ -32,8 +33,8 @@ export function Leaderboard({ entries, currentTeamName }: Props) {
           <div className="flex flex-col items-center w-1/3 max-w-[120px] order-1 z-10 relative h-full justify-end">
             <div className="absolute top-10 text-[48px] font-extrabold opacity-40" style={{ color: "var(--fg-muted)" }}>2</div>
             <div className="rounded-t-[20px] w-full h-[60%] flex flex-col items-center justify-start pt-4 shadow-lg border-b-[6px] transition-transform hover:-translate-y-1" style={{ background: "var(--color-brand-green)", color: "white", borderColor: "var(--color-brand-green-dark, #1e5000)" }}>
-              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center mb-2 shadow-sm">
-                <span className="text-[20px]">⭐</span>
+              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center mb-2 shadow-sm overflow-hidden">
+                <img src={getAvatarUrl(team2.avatarSeed, 40)} alt="" className="w-full h-full object-cover" />
               </div>
               <span className="text-[14px] font-extrabold truncate w-full px-2 text-center">{team2.name}</span>
               <span className="text-[28px] font-extrabold mt-auto pb-4"><CountUp to={team2.score} /></span>
@@ -47,9 +48,12 @@ export function Leaderboard({ entries, currentTeamName }: Props) {
             <div className="absolute top-0 z-30 animate-bounce">
               <span className="text-6xl drop-shadow-md">👑</span>
             </div>
-            <div className="rounded-t-[20px] w-full h-[80%] flex flex-col items-center justify-start pt-12 shadow-lg border-b-[6px] relative overflow-hidden" style={{ background: "var(--surface)", borderColor: "var(--color-brand-gold)" }}>
+            <div className="rounded-t-[20px] w-full h-[80%] flex flex-col items-center justify-start pt-8 shadow-lg border-b-[6px] relative overflow-hidden" style={{ background: "var(--surface)", borderColor: "var(--color-brand-gold)" }}>
               <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(to bottom, rgba(255, 200, 0, 0.1), transparent)" }}></div>
-              <span className="text-[15px] font-extrabold truncate w-full px-2 text-center mt-2" style={{ color: "var(--fg)" }}>{team1.name}</span>
+              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center mb-1 shadow-sm overflow-hidden border-2" style={{ borderColor: "var(--color-brand-gold)" }}>
+                <img src={getAvatarUrl(team1.avatarSeed, 48)} alt="" className="w-full h-full object-cover" />
+              </div>
+              <span className="text-[15px] font-extrabold truncate w-full px-2 text-center" style={{ color: "var(--fg)" }}>{team1.name}</span>
               <span className="text-[32px] font-extrabold mt-auto pb-4 drop-shadow-sm" style={{ color: "var(--color-brand-gold)" }}><CountUp to={team1.score} /></span>
             </div>
           </div>
@@ -60,7 +64,10 @@ export function Leaderboard({ entries, currentTeamName }: Props) {
           <div className="flex flex-col items-center w-1/3 max-w-[120px] order-3 z-10 relative h-full justify-end">
             <div className="absolute top-20 text-[48px] font-extrabold opacity-40" style={{ color: "var(--fg-muted)" }}>3</div>
             <div className="rounded-t-[20px] w-full h-[45%] flex flex-col items-center justify-start pt-4 shadow-lg border-b-[6px]" style={{ background: "var(--surface)", borderColor: "var(--border-soft)" }}>
-              <span className="text-[14px] font-extrabold truncate w-full px-2 text-center mt-2" style={{ color: "var(--fg)" }}>{team3.name}</span>
+              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center mb-1 shadow-sm overflow-hidden">
+                <img src={getAvatarUrl(team3.avatarSeed, 40)} alt="" className="w-full h-full object-cover" />
+              </div>
+              <span className="text-[14px] font-extrabold truncate w-full px-2 text-center" style={{ color: "var(--fg)" }}>{team3.name}</span>
               <span className="text-[28px] font-extrabold mt-auto pb-4" style={{ color: "var(--fg-muted)" }}><CountUp to={team3.score} /></span>
             </div>
           </div>
@@ -92,8 +99,8 @@ export function Leaderboard({ entries, currentTeamName }: Props) {
             >
               <div className="flex items-center gap-4 md:gap-6">
                 <span className="text-[28px] md:text-[32px] font-extrabold w-8 text-center" style={{ color: "var(--fg-muted)", opacity: 0.7 }}>{rank}</span>
-                <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: iconBg }}>
-                  <span className="text-[24px]">👥</span>
+                <div className="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden" style={{ background: iconBg }}>
+                  <img src={getAvatarUrl(entry.avatarSeed, 48)} alt="" className="w-full h-full object-cover" />
                 </div>
                 <span className="text-[16px] md:text-[18px] font-extrabold" style={{ color: isCurrent ? "var(--color-brand-green)" : "var(--fg)" }}>
                   {entry.name} {isCurrent && "(You)"}

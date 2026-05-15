@@ -7,6 +7,7 @@ import { SuccessOverlay } from "@/components/SuccessOverlay";
 import { BroadcastBanner } from "@/components/BroadcastBanner";
 import { TeamMap } from "@/components/TeamMap";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { getAvatarUrl } from "@/lib/avatar";
 import { useBroadcastListener } from "@/hooks/useBroadcastListener";
 import { useTeamLocationsRealtime } from "@/hooks/useTeamLocationsRealtime";
 import { useProximityAlert } from "@/hooks/useProximityAlert";
@@ -30,6 +31,7 @@ export default function SpotLeaderPage() {
   const [penaltyMinutes, setPenaltyMinutes] = useState(0);
   const [showSuccess, setShowSuccess] = useState(false);
   const [successPoints, setSuccessPoints] = useState(0);
+  const [showGlobalView, setShowGlobalView] = useState(false);
   const sessionRole = session?.role === "spot-leader" ? "spot-leader" : null;
   const broadcast = useBroadcastListener(sessionRole);
   const teamLocations = useTeamLocationsRealtime();
@@ -302,6 +304,128 @@ export default function SpotLeaderPage() {
           </div>
         </Reveal>
 
+        {/* Mission Roadmap — All Teams */}
+        <Reveal delay={0.12} duration={0.5}>
+          <div className="mb-8">
+            <button
+              onClick={() => setShowGlobalView(!showGlobalView)}
+              className="w-full rounded-[20px] p-4 text-left transition-all flex items-center justify-between gap-3"
+              style={{ background: "#FFFFFF", boxShadow: "0 3px 0 rgba(0,0,0,0.06)" }}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🎯</span>
+                <div>
+                  <p className="text-[15px] font-black" style={{ color: "#2B2B2B" }}>Mission Roadmap — All Teams</p>
+                  <p className="text-[11px] font-extrabold uppercase tracking-wide" style={{ color: "#999" }}>
+                    {data?.allTeams.filter(t => t.fullRoute && t.fullRoute.length > 0).length ?? 0} Teams · Route Progress
+                  </p>
+                </div>
+              </div>
+              <motion.span
+                animate={{ rotate: showGlobalView ? 180 : 0 }}
+                className="text-xl opacity-40"
+                style={{ color: "#777" }}
+              >
+                ▼
+              </motion.span>
+            </button>
+
+            <AnimatePresence>
+              {showGlobalView && data?.allTeams && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="overflow-hidden"
+                >
+                  <div className="flex flex-col gap-4 pt-4">
+                    {data.allTeams.filter(t => t.fullRoute && t.fullRoute.length > 0).map((team, tIdx) => {
+                      const route = team.fullRoute;
+                      const completed = route.filter(s => ["completed","revealed","solved"].includes(s.status || "")).length;
+                      const leaderAvatar = team.participants?.find(p => p.isLeader)?.avatarEmoji || team.participants?.[0]?.avatarEmoji || team.teamName;
+                      return (
+                        <motion.div
+                          key={team.teamId}
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: tIdx * 0.03 }}
+                          className="rounded-[20px] p-4 sm:p-5"
+                          style={{ background: "#FFFFFF", boxShadow: "0 3px 0 rgba(0,0,0,0.06)" }}
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0 border-2" style={{ borderColor: team.huntCompleted ? "#FFC800" : "#58CC02" }}>
+                                <img src={getAvatarUrl(leaderAvatar, 36)} alt="" className="w-full h-full object-cover" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-[14px] font-black truncate" style={{ color: "#2B2B2B" }}>{team.teamName}</p>
+                                <p className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "#999" }}>
+                                  {team.totalPoints} pts{team.huntCompleted ? " · 👑 Done" : ""}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0 ml-2">
+                              <span className="text-[16px] font-black" style={{ color: "#58CC02" }}>{completed}/{route.length}</span>
+                              <p className="text-[8px] font-black uppercase tracking-tight" style={{ color: "#aaa" }}>Cleared</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-0 overflow-x-auto pb-1 scrollbar-hide">
+                            {route.map((step, idx) => {
+                              const isCompleted = ["completed","revealed","solved"].includes(step.status || "");
+                              const isCurrent = step.isCurrent;
+                              return (
+                                <div key={idx} className="flex items-center gap-0">
+                                  <div className="flex flex-col items-center min-w-[72px]">
+                                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-[12px] font-black border-[3px] transition-all shrink-0"
+                                      style={{
+                                        background: isCompleted ? "#58CC02" : isCurrent ? "#1CB0F6" : "#F7F7F7",
+                                        borderColor: isCompleted ? "#46A302" : isCurrent ? "#0f7ac0" : "#E8E8E8",
+                                        color: isCompleted || isCurrent ? "white" : "#BBB",
+                                        boxShadow: isCurrent ? "0 0 0 5px rgba(28,176,246,0.15)" : "none",
+                                      }}
+                                    >
+                                      {isCompleted ? "🏆" : isCurrent ? "🎯" : "🔒"}
+                                    </div>
+                                    <p className="mt-1 text-[8px] font-black uppercase truncate max-w-[64px] text-center leading-tight"
+                                      style={{ color: isCompleted ? "#58CC02" : isCurrent ? "#1CB0F6" : "#BBB" }}>
+                                      {isCompleted || isCurrent ? step.spotName : "🔒"}
+                                    </p>
+                                    <div className="mt-0.5 flex items-center gap-0.5">
+                                      <span className="text-[7px]" style={{ opacity: step.arrivalApproved ? 1 : 0.2 }}>📍</span>
+                                      {step.hasMiniGame && (
+                                        <span className="text-[7px]" style={{ opacity: step.miniGamePlayed ? 1 : 0.2 }}>🎮</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {idx < route.length - 1 && (
+                                    <div className="w-4 h-[3px] rounded-full mx-0.5 shrink-0"
+                                      style={{
+                                        background: isCompleted ? "#58CC02" : isCurrent ? "#1CB0F6" : "#E8E8E8",
+                                        opacity: isCompleted ? 1 : 0.35,
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                    {data.allTeams.filter(t => t.fullRoute && t.fullRoute.length > 0).length === 0 && (
+                      <div className="text-center py-8">
+                        <span className="text-3xl">🗺️</span>
+                        <p className="mt-2 text-[14px] font-bold" style={{ color: "#999" }}>No route plans assigned yet</p>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </Reveal>
+
         <div className="flex flex-col gap-4">
           {loading && !data && (
             <div className="py-12 text-center">
@@ -470,6 +594,8 @@ export default function SpotLeaderPage() {
             ))}
           </AnimatePresence>
         </div>
+
+
 
         <Reveal delay={0.2} duration={0.5}>
           <p className="mt-12 text-center text-[13px] font-semibold" style={{ color: "#BBBBBB" }}>

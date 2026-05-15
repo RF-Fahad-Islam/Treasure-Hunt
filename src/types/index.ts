@@ -82,6 +82,12 @@ export interface TeamRoute {
   clue_solved_at: string | null;
   answer_revealed: boolean | null;
   points_awarded: number | null;
+  arrival_approved: boolean | null;
+  arrival_approved_at: string | null;
+  arrival_points: number | null;
+  mini_game_started: boolean | null;
+  mini_game_started_at: string | null;
+  mini_game_score: number | null;
   mini_game_played: boolean | null;
   mini_game_points: number | null;
   penalty_seconds: number | null;

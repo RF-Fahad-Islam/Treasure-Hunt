@@ -11,6 +11,18 @@ export interface TeamLobbyEntry {
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
+export interface TeamRoadmapStep {
+  spotId: string;
+  spotName: string;
+  status: string | null;
+  routeOrder: number;
+  isCurrent: boolean;
+  isReached: boolean;
+  arrivalApproved: boolean;
+  miniGamePlayed: boolean;
+  hasMiniGame: boolean;
+}
+
 export interface DashboardData {
   team: Team;
   currentRoute: TeamRoute | null;
@@ -19,6 +31,8 @@ export interface DashboardData {
   eventConfig: EventConfig | null;
   totalClues: number;
   completedClues: number;
+  fullRoute: TeamRoadmapStep[];
+  allSpots: Spot[];
 }
 
 export interface LeaderboardEntry {
@@ -28,6 +42,7 @@ export interface LeaderboardEntry {
   score: number;
   penalty: number;
   completed: boolean;
+  avatarSeed: string;
 }
 
 /* ─── Fetch dashboard data for a team ────────────────────────── */
@@ -75,6 +90,38 @@ export async function fetchDashboardData(teamId: string): Promise<DashboardData>
     (r) => r.status === "completed" || r.answer_revealed
   ).length;
 
+  // 4. Construct full route for gamified roadmap
+  const clueIds = routes.map(r => r.clue_id);
+  const [cluesRes, spotsRes] = await Promise.all([
+    insforge.database.from("clues").select("id, spot_id").in("id", clueIds),
+    insforge.database.from("spots").select("*")
+  ]);
+
+  const clueToSpotId: Record<string, string> = {};
+  if (cluesRes.data) cluesRes.data.forEach(c => clueToSpotId[c.id] = c.spot_id);
+
+  const allSpots: Spot[] = spotsRes.data ?? [];
+  const spotMap: Record<string, { id: string, name: string, has_mini_game: boolean }> = {};
+  allSpots.forEach(s => spotMap[s.id] = { id: s.id, name: s.name, has_mini_game: !!s.has_mini_game });
+
+  const fullRoute: TeamRoadmapStep[] = routes.map(r => {
+    const sid = clueToSpotId[r.clue_id];
+    const s = spotMap[sid] || { id: "", name: "Unknown", has_mini_game: false };
+    const isReached = r.route_order <= currentIdx;
+    
+    return {
+      spotId: s.id,
+      spotName: isReached ? s.name : "???",
+      status: r.status,
+      routeOrder: r.route_order,
+      isCurrent: r.route_order === currentIdx,
+      isReached,
+      arrivalApproved: !!r.arrival_approved,
+      miniGamePlayed: !!r.mini_game_played,
+      hasMiniGame: s.has_mini_game,
+    };
+  });
+
   return {
     team,
     currentRoute,
@@ -83,6 +130,8 @@ export async function fetchDashboardData(teamId: string): Promise<DashboardData>
     eventConfig,
     totalClues: routes.length,
     completedClues,
+    fullRoute,
+    allSpots,
   };
 }
 
@@ -105,6 +154,7 @@ export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
     score: t.total_points ?? 0,
     penalty: t.total_penalty_seconds ?? 0,
     completed: t.hunt_completed ?? false,
+    avatarSeed: t.avatar_seed || t.name,
   }));
 }
 
