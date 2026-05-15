@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
 type Props = {
   open: boolean;
   onContinue: () => void;
-  /** Seconds before auto-continuing. Set 0 to disable. */
-  autoContinueSec?: number;
+  onReveal: () => void;
   title?: string;
   body?: string;
 };
@@ -15,17 +14,10 @@ const ease = [0.22, 1, 0.36, 1] as const;
 export function ExpiredOverlay({
   open,
   onContinue,
-  autoContinueSec = 5,
+  onReveal,
   title = "Mission Expired",
-  body = "No worries! A new clue is unlocking. Dust yourself off and let's keep moving.",
+  body = "No worries! You can keep solving for the +100 bonus, or reveal the spot for 0 points if you're stuck.",
 }: Props) {
-  const [secondsLeft, setSecondsLeft] = useState(autoContinueSec);
-
-  // Reset countdown each time we open
-  useEffect(() => {
-    if (open) setSecondsLeft(autoContinueSec);
-  }, [open, autoContinueSec]);
-
   // Lock scroll
   useEffect(() => {
     if (!open) return;
@@ -35,17 +27,6 @@ export function ExpiredOverlay({
       document.body.style.overflow = prev;
     };
   }, [open]);
-
-  // Countdown tick
-  useEffect(() => {
-    if (!open || autoContinueSec <= 0) return;
-    if (secondsLeft <= 0) {
-      onContinue();
-      return;
-    }
-    const id = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
-    return () => clearTimeout(id);
-  }, [open, secondsLeft, autoContinueSec, onContinue]);
 
   // Escape closes
   useEffect(() => {
@@ -174,34 +155,30 @@ export function ExpiredOverlay({
               {body}
             </motion.p>
 
-            {/* Continue button */}
-            <motion.button
-              initial={{ y: 16, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.55, duration: 0.45, ease }}
-              onClick={onContinue}
-              className="btn-press ripple btn-press--lg btn-primary w-full"
-              autoFocus
-            >
-              <span>Get next clue</span>
-              <Arrow />
-            </motion.button>
-
-            {/* Auto-continue countdown */}
-            {autoContinueSec > 0 && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.7, duration: 0.4 }}
-                className="-mt-2 text-[12px] font-semibold text-[#999] dark:text-white/45"
+            {/* Action buttons */}
+            <div className="flex w-full flex-col gap-3">
+              <motion.button
+                initial={{ y: 16, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.55, duration: 0.45, ease }}
+                onClick={onContinue}
+                className="btn-press ripple btn-press--lg btn-primary w-full"
+                autoFocus
               >
-                Next clue ready in{" "}
-                <span className="font-extrabold tabular-nums text-[#777] dark:text-white/65">
-                  {secondsLeft}s
-                </span>
-                …
-              </motion.div>
-            )}
+                <span>Continue Solving (+100)</span>
+                <Arrow />
+              </motion.button>
+
+              <motion.button
+                initial={{ y: 16, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.65, duration: 0.45, ease }}
+                onClick={onReveal}
+                className="btn-press ripple btn-press--lg btn-secondary w-full"
+              >
+                <span>Reveal Spot Location (+0)</span>
+              </motion.button>
+            </div>
           </motion.div>
         </motion.div>
       )}

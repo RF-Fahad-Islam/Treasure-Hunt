@@ -3,8 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { Logo } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
 import { RollLookup } from "./RollLookup";
+import { LobbyModal } from "./LobbyModal";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useSession, useAuthStore } from "@/store/authStore";
+import { getAvatarUrl } from "@/lib/avatar";
 
 const ROLE_LABEL: Record<string, string> = {
   team: "🏃 Team",
@@ -25,6 +27,7 @@ export function Nav() {
 
   const [scrolled, setScrolled] = useState(false);
   const [showLookup, setShowLookup] = useState(false);
+  const [showLobby, setShowLobby] = useState(false);
   const [lookupInitialStep, setLookupInitialStep] = useState<"roll" | "register">("roll");
   const [showMenu, setShowMenu] = useState(false);
   const [confirmDef, setConfirmDef] = useState<{ title: string; message: string; destructive?: boolean } | null>(null);
@@ -41,11 +44,18 @@ export function Nav() {
       setLookupInitialStep(customEvent.detail || "roll");
       setShowLookup(true);
     };
+    
+    const handleOpenLobby = () => {
+      setShowLobby(true);
+    };
+
     window.addEventListener("open-lookup", handleOpenLookup);
+    window.addEventListener("open-lobby", handleOpenLobby);
     
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("open-lookup", handleOpenLookup);
+      window.removeEventListener("open-lobby", handleOpenLobby);
     };
   }, []);
 
@@ -66,6 +76,7 @@ export function Nav() {
   return (
     <>
       <RollLookup open={showLookup} onClose={() => setShowLookup(false)} initialStep={lookupInitialStep} />
+      <LobbyModal open={showLobby} onClose={() => setShowLobby(false)} />
       <ConfirmDialog
         open={confirmDef !== null}
         title={confirmDef?.title ?? ""}
@@ -116,12 +127,19 @@ export function Nav() {
                     className="flex items-center gap-2 rounded-full px-3 py-1.5 text-[13px] font-extrabold transition-all"
                     style={{ background: "var(--surface)", color: "var(--fg)" }}
                   >
-                    <span
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-extrabold text-white"
-                      style={{ background: "var(--color-brand-green)" }}
-                    >
-                      {initials}
-                    </span>
+                    {session.role === "team" && (session as any).avatarSeed ? (
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full overflow-hidden border-2 border-white/20"
+                        style={{ background: "#F0F0F0" }}>
+                        <img src={getAvatarUrl((session as any).avatarSeed, 32)} alt="" className="w-full h-full object-cover" />
+                      </span>
+                    ) : (
+                      <span
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-extrabold text-white"
+                        style={{ background: "var(--color-brand-green)" }}
+                      >
+                        {initials}
+                      </span>
+                    )}
                   </button>
 
                   {showMenu && (

@@ -375,18 +375,26 @@ export async function approveRegistration(id: string): Promise<Registration> {
   const registration = reg as Registration;
   if (registration.approved) throw new Error("Already approved");
 
-  await insforge.database.from("participants").insert([{
-    name: registration.name,
-    roll: registration.roll,
-    email: registration.email,
-    is_leader: false,
-  }]);
-
   const { error: updateErr } = await insforge.database
     .from("registrations")
     .update({ approved: true })
     .eq("id", id);
   if (updateErr) throw new Error(updateErr.message);
+
+  // Copy avatar_emoji from registration to participant if participant exists
+  if (registration.avatar_emoji) {
+    const { data: participants } = await insforge.database
+      .from("participants")
+      .select("id")
+      .eq("roll", registration.roll)
+      .limit(1);
+    if (participants && participants.length > 0) {
+      await insforge.database
+        .from("participants")
+        .update({ avatar_emoji: registration.avatar_emoji })
+        .eq("id", (participants[0] as any).id);
+    }
+  }
 
   return { ...registration, approved: true };
 }

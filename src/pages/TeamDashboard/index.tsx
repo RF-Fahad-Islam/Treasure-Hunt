@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Reveal } from "@/components/Reveal";
 import { SuccessOverlay } from "@/components/SuccessOverlay";
 import { ExpiredOverlay } from "@/components/ExpiredOverlay";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PointsToast } from "@/components/PointsToast";
 import { LeaderboardOverlay } from "@/components/leaderboard/LeaderboardOverlay";
 import { BroadcastBanner } from "@/components/BroadcastBanner";
@@ -10,6 +11,7 @@ import { PullToRefresh } from "@/components/PullToRefresh";
 import { LocationGate } from "@/components/LocationGate";
 import { OSStatusBar } from "@/components/OSStatusBar";
 import { NotificationBell } from "@/components/NotificationBell";
+import { ParticipantLobby } from "@/components/ParticipantLobby";
 import { TeamAvatarRoom } from "@/components/TeamAvatarRoom";
 import { OtherTeamsView } from "@/components/OtherTeamsView";
 import { TeamLogoEditModal } from "@/components/TeamLogoEditModal";
@@ -81,6 +83,7 @@ export default function TeamDashboardPage() {
   const [showNameEdit, setShowNameEdit] = useState(false);
   const [showTimeout, setShowTimeout] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showConfirmReveal, setShowConfirmReveal] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const prevCompletedRef = useRef(0);
   const prevPointsRef = useRef(0);
@@ -153,6 +156,7 @@ export default function TeamDashboardPage() {
     if (!data?.currentRoute || !teamId) return;
     try {
       await revealAnswer(data.currentRoute.id, teamId);
+      setShowConfirmReveal(false);
       setShowTimeout(false);
       await load();
     } catch (err) {
@@ -189,12 +193,22 @@ export default function TeamDashboardPage() {
 
   const myMapLocation = initialPos ? { lat: initialPos.lat, lng: initialPos.lng } : null;
 
-  if (!teamId) {
+  if (!session) {
     return (
       <div className="relative min-h-screen overflow-hidden" style={{ background: "#F7F7F7" }}>
         <div className="flex min-h-screen flex-col items-center justify-center p-8">
           <p className="text-5xl">🔐</p>
           <p className="mt-4 font-display text-2xl font-extrabold" style={{ color: "#777777" }}>Not logged in</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (session.role === "team" && !teamId) {
+    return (
+      <div className="relative min-h-screen overflow-hidden" style={{ background: "#F7F7F7", paddingBottom: "calc(3rem + env(safe-area-inset-bottom, 0px))" }}>
+        <div className="mx-auto max-w-2xl px-4 pt-24">
+          <ParticipantLobby />
         </div>
       </div>
     );
@@ -216,7 +230,21 @@ export default function TeamDashboardPage() {
     <div className="relative min-h-screen overflow-hidden pb-28" style={{ background: "#F7F7F7", paddingBottom: "calc(7rem + env(safe-area-inset-bottom, 0px))" }}>
 
       <SuccessOverlay open={showSuccess} onClose={() => setShowSuccess(false)} pointsEarned={successPoints} newRank={successRank} />
-      <ExpiredOverlay open={showTimeout} onContinue={handleReveal} autoContinueSec={5} />
+      <ExpiredOverlay 
+        open={showTimeout} 
+        onContinue={() => setShowTimeout(false)} 
+        onReveal={() => setShowConfirmReveal(true)} 
+      />
+      <ConfirmDialog
+        open={showConfirmReveal}
+        title="Reveal Spot Location?"
+        message="If you reveal the spot location now, you will receive +0 bonus points for this clue. You will still incur any accrued time penalties. Continue?"
+        confirmLabel="Reveal Spot"
+        cancelLabel="Keep Finding"
+        destructive={true}
+        onConfirm={handleReveal}
+        onCancel={() => setShowConfirmReveal(false)}
+      />
       <BroadcastBanner broadcast={broadcast} />
 
       <LeaderboardOverlay
@@ -465,7 +493,7 @@ export default function TeamDashboardPage() {
                     {/* Other Teams (leader only) */}
                     {isLeader && (
                       <Reveal delay={0.18} duration={0.5}>
-                        <OtherTeamsView teams={allTeamsLobby} excludeTeamId={teamId} />
+                        <OtherTeamsView teams={allTeamsLobby} excludeTeamId={teamId!} />
                       </Reveal>
                     )}
 
@@ -528,7 +556,7 @@ export default function TeamDashboardPage() {
             </button>
           ))}
           <div className="w-px h-6 mx-1" style={{ background: "rgba(0,0,0,0.06)" }} />
-          <NotificationBell teamId={teamId} onNewPoints={handleNewPoints} dropUp />
+          <NotificationBell teamId={teamId!} onNewPoints={handleNewPoints} dropUp />
         </div>
       </div>
     </div>
