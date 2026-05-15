@@ -2,16 +2,16 @@ import { motion } from "motion/react";
 import { Reveal, WordReveal } from "./Reveal";
 
 const SPOTS = [
-  "ARCH NODE",
-  "SYNC CENTER",
-  "REQUIEM PROTOCOL",
-  "FLIGHT GRID",
-  "IMMORTAL SIGIL",
-  "JUNCTION PRIME",
-  "TRADE MATRIX",
-  "ADMIN SEAT",
-  "GREEN EXPANSE",
-  "LIVING DATABASE"
+  "Arch Node",
+  "Sync Center",
+  "Requiem Protocol",
+  "Flight Grid",
+  "Immortal Sigil",
+  "Junction Prime",
+  "Trade Matrix",
+  "Admin Seat",
+  "Green Expanse",
+  "Living Database"
 ]
 
 const ACCENTS = [
