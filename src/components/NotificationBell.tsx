@@ -7,9 +7,11 @@ interface Props {
   teamId: string;
   /** Called when new notifications arrive so parent can show SuccessOverlay etc. */
   onNewPoints?: (points: number) => void;
+  /** If true, dropdown opens upward (for bottom-anchored placement) */
+  dropUp?: boolean;
 }
 
-export function NotificationBell({ teamId, onNewPoints }: Props) {
+export function NotificationBell({ teamId, onNewPoints, dropUp }: Props) {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const prevLenRef = useRef(0);
@@ -73,11 +75,11 @@ export function NotificationBell({ teamId, onNewPoints }: Props) {
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.95 }}
+            initial={{ opacity: 0, y: dropUp ? 8 : -8, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.95 }}
+            exit={{ opacity: 0, y: dropUp ? 8 : -8, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute left-0 mt-2 w-80 sm:w-96 rounded-2xl bg-[#1A1A1A] border border-[var(--border-soft)] shadow-2xl overflow-hidden z-50"
+            className={`absolute ${dropUp ? "bottom-full mb-2" : "left-0 mt-2"} w-80 sm:w-96 rounded-2xl bg-[#1A1A1A] border border-[var(--border-soft)] shadow-2xl overflow-hidden z-50`}
             style={{ maxHeight: "70vh" }}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">

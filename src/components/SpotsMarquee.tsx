@@ -74,8 +74,15 @@ export function SpotsMarquee() {
         style={{ perspective: "1400px" }}
       >
         {/* Edge fades — themed */}
-        <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-16 bg-gradient-to-r from-[#F7F7F7] to-transparent dark:from-[#05030a] sm:w-32" />
-        <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-[#F7F7F7] to-transparent dark:from-[#05030a] sm:w-32" />
+        {/* Edge fades — themed with smooth gradient blur */}
+        <div 
+          className="pointer-events-none absolute inset-y-0 left-0 z-10 w-24 bg-white/40 backdrop-blur-[12px] dark:bg-black/40 sm:w-48"
+          style={{ maskImage: 'linear-gradient(to right, black 20%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to right, black 20%, transparent 100%)' }}
+        />
+        <div 
+          className="pointer-events-none absolute inset-y-0 right-0 z-10 w-24 bg-white/40 backdrop-blur-[12px] dark:bg-black/40 sm:w-48"
+          style={{ maskImage: 'linear-gradient(to left, black 20%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to left, black 20%, transparent 100%)' }}
+        />
 
         <div
           className="overflow-hidden"

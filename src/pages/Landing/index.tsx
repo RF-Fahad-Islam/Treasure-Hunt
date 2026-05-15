@@ -1,7 +1,7 @@
 import { Nav } from "@/components/Nav";
 import { Hero } from "@/components/Hero";
-import { About } from "@/components/About";
 import { HowItWorks } from "@/components/HowItWorks";
+import { Experience } from "@/components/Experience";
 import { SpotsMarquee } from "@/components/SpotsMarquee";
 import { LiveLeaderboard } from "@/components/LiveLeaderboard";
 import { CountdownTimer } from "@/components/CountdownTimer";
@@ -21,7 +21,7 @@ export default function LandingPage() {
       <Nav />
       <main className="relative z-10">
         <Hero />
-        <About />
+        <Experience />
         <HowItWorks />
         <SpotsMarquee />
         <LiveLeaderboard />

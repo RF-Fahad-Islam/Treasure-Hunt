@@ -18,7 +18,9 @@ export function MiniGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameStateUi, setGameStateUi] = useState<"start" | "playing" | "gameover">("start");
   const [scoreUi, setScoreUi] = useState(0);
-  const [highScore, setHighScore] = useState(0);
+  const [highScore, setHighScore] = useState(() => {
+    return Number(localStorage.getItem("minigame_highscore") || 0);
+  });
   const [leaderboard, setLeaderboard] = useState<MiniGameScore[]>([]);
   const [nickname, setNickname] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -301,7 +303,11 @@ export function MiniGame() {
               s.state = "gameover";
               setGameStateUi("gameover");
               playSound("die");
-              if (s.score > highScore) setHighScore(Math.floor(s.score));
+              const finalScore = Math.floor(s.score);
+              if (finalScore > highScore) {
+                setHighScore(finalScore);
+                localStorage.setItem("minigame_highscore", finalScore.toString());
+              }
               s.shake = 15;
               spawnExplosion(p.x, p.y);
             }
@@ -594,24 +600,27 @@ export function MiniGame() {
           </div>
           
           {/* Mobile Controls */}
-          <div className="mt-4 sm:hidden flex justify-between items-center px-2 touch-none" onContextMenu={e => e.preventDefault()}>
-            <button 
-              onPointerDown={() => handlePointerDown("ArrowDown")}
-              onPointerUp={() => handlePointerUp("ArrowDown")}
-              onPointerCancel={() => handlePointerUp("ArrowDown")}
-              className="group relative w-20 h-20 bg-white dark:bg-[#2A2A2A] border-b-4 border-[#E5E5E5] dark:border-[#111] rounded-3xl flex flex-col items-center justify-center active:translate-y-1 active:border-b-0 shadow-md transition-all"
+          <div className="mt-4 sm:hidden flex justify-around items-center px-4 touch-none pb-4" onContextMenu={e => e.preventDefault()}>
+            <motion.button 
+              whileTap={{ y: 4, scale: 0.95 }}
+              onPointerDown={(e) => { e.preventDefault(); handlePointerDown("ArrowDown"); }}
+              onPointerUp={(e) => { e.preventDefault(); handlePointerUp("ArrowDown"); }}
+              onPointerCancel={(e) => { e.preventDefault(); handlePointerUp("ArrowDown"); }}
+              className="group relative w-24 h-24 bg-white dark:bg-[#2A2A2A] border-b-[6px] border-[#E5E5E5] dark:border-[#111] rounded-[2rem] flex flex-col items-center justify-center shadow-lg transition-all"
             >
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="dark:text-white text-[#555]"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
-              <span className="text-[10px] font-black dark:text-white/40 text-black/40 uppercase mt-1">Duck</span>
-            </button>
-            <button 
-              onPointerDown={() => handlePointerDown("Jump")}
-              onPointerUp={() => handlePointerUp("Jump")}
-              onPointerCancel={() => handlePointerUp("Jump")}
-              className="w-24 h-24 bg-[var(--color-brand-green)] border-b-4 border-[#3A8400] rounded-full flex items-center justify-center active:translate-y-1 active:border-b-0 shadow-lg text-white font-black text-xl tracking-tighter"
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="dark:text-white text-[#555]"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+              <span className="text-[11px] font-black dark:text-white/40 text-black/40 uppercase mt-1">Duck</span>
+            </motion.button>
+            <motion.button 
+              whileTap={{ y: 4, scale: 0.95 }}
+              onPointerDown={(e) => { e.preventDefault(); handlePointerDown("Jump"); }}
+              onPointerUp={(e) => { e.preventDefault(); handlePointerUp("Jump"); }}
+              onPointerCancel={(e) => { e.preventDefault(); handlePointerUp("Jump"); }}
+              className="w-28 h-28 bg-[var(--color-brand-green)] border-b-[8px] border-[#3A8400] rounded-full flex flex-col items-center justify-center shadow-xl text-white font-black transition-all"
             >
-              JUMP
-            </button>
+              <span className="text-2xl tracking-tighter leading-none">JUMP</span>
+              <span className="text-[10px] opacity-70 uppercase mt-1">or Start</span>
+            </motion.button>
           </div>
         </div>
 

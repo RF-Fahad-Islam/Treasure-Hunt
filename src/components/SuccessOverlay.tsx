@@ -179,7 +179,7 @@ export function SuccessOverlay({
                 stiffness: 200,
                 damping: 16,
               }}
-              className="w-full px-2 font-display text-[42px] font-black leading-none tracking-tight text-[#58CC02] sm:text-[54px] dark:gradient-text break-words"
+              className="w-full px-2 font-display text-[32px] font-black leading-none tracking-tight text-[#58CC02] sm:text-[54px] dark:gradient-text break-words"
               style={{
                 textShadow:
                   "var(--nice-shadow, 0 4px 0 rgba(58, 132, 0, 0.12))",
