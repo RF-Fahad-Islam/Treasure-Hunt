@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import confetti from "canvas-confetti";
 import { Reveal } from "./Reveal";
-import { Lock, Unlock, Sparkles, Key } from "lucide-react";
+import { Lock, Sparkles, Key } from "lucide-react";
 
 const CODE = "2026"; // The hunt year
 
