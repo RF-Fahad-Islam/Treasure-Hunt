@@ -2,17 +2,17 @@ import { motion } from "motion/react";
 import { Reveal, WordReveal } from "./Reveal";
 
 const SPOTS = [
-  "Curzon Hall",
-  "TSC",
-  "Shaheed Minar",
-  "Doel Chattar",
-  "Aparajeyo Bangla",
-  "Hakim Chattar",
-  "Mall Chattar",
-  "VC Chattar",
-  "Suhrawardy Udyan",
-  "Botanical Garden",
-];
+  "ARCH NODE",
+  "SYNC CENTER",
+  "REQUIEM PROTOCOL",
+  "FLIGHT GRID",
+  "IMMORTAL SIGIL",
+  "JUNCTION PRIME",
+  "TRADE MATRIX",
+  "ADMIN SEAT",
+  "GREEN EXPANSE",
+  "LIVING DATABASE"
+]
 
 const ACCENTS = [
   { bg: "bg-[#E8FFD1]", fg: "text-[#3A8400]", dot: "#58CC02" },
@@ -75,11 +75,11 @@ export function SpotsMarquee() {
       >
         {/* Edge fades — themed */}
         {/* Edge fades — themed with smooth gradient blur */}
-        <div 
+        <div
           className="pointer-events-none absolute inset-y-0 left-0 z-10 w-24 bg-white/40 backdrop-blur-[12px] dark:bg-black/40 sm:w-48"
           style={{ maskImage: 'linear-gradient(to right, black 20%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to right, black 20%, transparent 100%)' }}
         />
-        <div 
+        <div
           className="pointer-events-none absolute inset-y-0 right-0 z-10 w-24 bg-white/40 backdrop-blur-[12px] dark:bg-black/40 sm:w-48"
           style={{ maskImage: 'linear-gradient(to left, black 20%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to left, black 20%, transparent 100%)' }}
         />
