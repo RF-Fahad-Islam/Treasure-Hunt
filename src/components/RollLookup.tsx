@@ -1,20 +1,29 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuthStore } from "@/store/authStore";
 import { lookupByRoll, loginByRoll } from "@/services/auth";
+import { insforge } from "@/lib/insforge";
+import { welcomeEmailHtml } from "@/email-templates/welcome";
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  initialStep?: Step;
 }
 
-type Step = "roll" | "team-info" | "code" | "loading" | "error";
+type Step = "roll" | "team-info" | "code" | "loading" | "error" | "register" | "register-success";
 
-export function RollLookup({ open, onClose }: Props) {
+export function RollLookup({ open, onClose, initialStep = "roll" }: Props) {
   const setSession = useAuthStore((s) => s.setSession);
 
-  const [step, setStep] = useState<Step>("roll");
+  const [step, setStep] = useState<Step>(initialStep);
   const [roll, setRoll] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setStep(initialStep);
+    }
+  }, [open, initialStep]);
   const [teamCode, setTeamCode] = useState("");
   const [teamInfo, setTeamInfo] = useState<Awaited<ReturnType<typeof lookupByRoll>> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +99,7 @@ export function RollLookup({ open, onClose }: Props) {
                   roll={roll}
                   setRoll={setRoll}
                   onSubmit={handleRollSubmit}
+                  onRegister={() => setStep("register")}
                 />
               )}
 
@@ -165,6 +175,38 @@ export function RollLookup({ open, onClose }: Props) {
                   onBack={() => setStep("team-info")}
                 />
               )}
+
+              {step === "register" && (
+                <RegisterForm
+                  key="register"
+                  onBack={() => setStep("roll")}
+                  onSuccess={() => setStep("register-success")}
+                />
+              )}
+
+              {step === "register-success" && (
+                <motion.div
+                  key="register-success"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="flex flex-col gap-5 items-center text-center py-6"
+                >
+                  <p className="text-5xl">🎉</p>
+                  <h2 className="font-display text-[24px] font-extrabold" style={{ color: "var(--fg)" }}>
+                    Registration Submitted!
+                  </h2>
+                  <p className="text-[15px] font-semibold leading-relaxed" style={{ color: "var(--fg-muted)" }}>
+                    Your details have been recorded. <strong style={{ color: "var(--fg)" }}>All the teams will be assigned by your seniors</strong> closer to the event.
+                  </p>
+                  <button
+                    onClick={handleClose}
+                    className="btn-press ripple btn-primary w-full mt-4"
+                  >
+                    Got it!
+                  </button>
+                </motion.div>
+              )}
             </AnimatePresence>
           </motion.div>
         </motion.div>
@@ -179,10 +221,12 @@ function RollForm({
   roll,
   setRoll,
   onSubmit,
+  onRegister,
 }: {
   roll: string;
   setRoll: (v: string) => void;
   onSubmit: (e: FormEvent) => void;
+  onRegister: () => void;
 }) {
   const [showHelp, setShowHelp] = useState(false);
 
@@ -211,7 +255,7 @@ function RollForm({
       </label>
       <input
         type="text"
-        placeholder="e.g. 30-001"
+        placeholder="e.g. 30"
         value={roll}
         onChange={(e) => setRoll(e.target.value)}
         autoFocus
@@ -248,6 +292,19 @@ function RollForm({
       <p className="text-center text-[11px] font-semibold" style={{ color: "var(--fg-muted)" }}>
         Only registered DU CSE students can participate.
       </p>
+
+      <div className="mt-2 pt-4 border-t-2 flex flex-col gap-3" style={{ borderColor: "var(--border-soft)" }}>
+        <p className="text-center text-[13px] font-bold" style={{ color: "var(--fg-muted)" }}>
+          Haven't registered yet?
+        </p>
+        <button
+          type="button"
+          onClick={onRegister}
+          className="btn-press ripple btn-secondary w-full"
+        >
+          📝 Register for the Hunt
+        </button>
+      </div>
     </motion.form>
   );
 }
@@ -445,5 +502,133 @@ function Arrow() {
     <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden>
       <path d="M3 8h10m0 0L8.5 3.5M13 8l-4.5 4.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+/* ── Step 4: Registration ─────────────────────────────────────── */
+
+function RegisterForm({
+  onBack,
+  onSuccess,
+}: {
+  onBack: () => void;
+  onSuccess: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [roll, setRoll] = useState("");
+  const [email, setEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || !roll.trim() || !email.trim()) return;
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const { error: dbError } = await insforge.database
+        .from("registrations")
+        .insert({ name: name.trim(), roll: roll.trim(), email: email.trim() });
+
+      if (dbError) {
+        if (dbError.code === "23505") {
+          throw new Error("This roll number is already registered.");
+        }
+        throw dbError;
+      }
+
+      insforge.emails.send({
+        to: email.trim(),
+        subject: "Welcome to Treasure Hunt 2026!",
+        html: welcomeEmailHtml({ name: name.trim(), roll: roll.trim() }),
+      }).catch(() => {});
+
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message || "Failed to submit registration.");
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <motion.form
+      key="register"
+      onSubmit={handleSubmit}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.35 }}
+      className="flex flex-col gap-4"
+    >
+      <div className="text-center mb-2">
+        <p className="text-4xl mb-2">📝</p>
+        <h2 className="font-display text-[24px] font-extrabold" style={{ color: "var(--fg)" }}>
+          Register for the Hunt
+        </h2>
+        <p className="mt-1 text-[13px] font-semibold text-balance" style={{ color: "var(--fg-muted)" }}>
+          Sign up to participate. <strong style={{ color: "var(--fg)" }}>All teams will be assigned by your seniors.</strong>
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-[11px] font-extrabold uppercase tracking-[0.22em]" style={{ color: "var(--fg-muted)" }}>Full Name</label>
+        <input
+          type="text"
+          placeholder="MD Fahad Islam"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+          className="w-full rounded-2xl border-2 px-4 py-3 text-[16px] font-extrabold outline-none transition-all"
+          style={{ borderColor: "var(--border-soft)", background: "var(--surface)", color: "var(--fg)" }}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-[11px] font-extrabold uppercase tracking-[0.22em]" style={{ color: "var(--fg-muted)" }}>Student Roll</label>
+        <input
+          type="text"
+          placeholder="64"
+          value={roll}
+          onChange={(e) => setRoll(e.target.value)}
+          required
+          className="w-full rounded-2xl border-2 px-4 py-3 text-[16px] font-extrabold outline-none transition-all"
+          style={{ borderColor: "var(--border-soft)", background: "var(--surface)", color: "var(--fg)" }}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-[11px] font-extrabold uppercase tracking-[0.22em]" style={{ color: "var(--fg-muted)" }}>Email Address</label>
+        <input
+          type="email"
+          placeholder="rsfahad97@gmail.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          className="w-full rounded-2xl border-2 px-4 py-3 text-[16px] font-extrabold outline-none transition-all"
+          style={{ borderColor: "var(--border-soft)", background: "var(--surface)", color: "var(--fg)" }}
+        />
+      </div>
+
+      {error && (
+        <p className="text-[13px] font-bold text-center" style={{ color: "var(--color-brand-red)" }}>
+          {error}
+        </p>
+      )}
+
+      <button
+        data-sound="heavy"
+        type="submit"
+        disabled={submitting || !name.trim() || !roll.trim() || !email.trim()}
+        className="btn-press ripple btn-primary w-full disabled:opacity-50 mt-2"
+      >
+        <span>{submitting ? "Submitting..." : "Submit Registration"}</span>
+        {!submitting && <Arrow />}
+      </button>
+
+      <button type="button" onClick={onBack} className="w-full text-[13px] font-bold underline underline-offset-4" style={{ color: "var(--fg-muted)" }}>
+        ← Back to Find Team
+      </button>
+    </motion.form>
   );
 }

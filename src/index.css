@@ -91,6 +91,21 @@ body {
 
 /* Touch feedback ripple ------------------------------------------------ */
 
+/* Admin Tab Scrollbar --------------------------------------------------- */
+.admin-tabs-container::-webkit-scrollbar {
+  height: 6px;
+}
+.admin-tabs-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-tabs-container::-webkit-scrollbar-thumb {
+  background: var(--border-soft);
+  border-radius: 10px;
+}
+.admin-tabs-container::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
 .ripple {
   position: relative;
   overflow: hidden;

@@ -12,6 +12,7 @@ export interface ArrivingTeam {
   clueText: string;
   clueStartedAt: string | null;
   timeElapsedMinutes: number;
+  fullRoute: { spotName: string; status: string; isCurrent: boolean }[];
 }
 
 export interface SpotLeaderData {
@@ -69,6 +70,49 @@ export async function fetchSpotLeaderData(spotId: string): Promise<SpotLeaderDat
       ? Math.floor((Date.now() - new Date(route.clue_started_at).getTime()) / 60000)
       : 0;
 
+    // Fetch the full route for this team
+    const fullRouteRes = await insforge.database
+      .from("team_routes")
+      .select("route_order, status, clue_id")
+      .eq("team_id", team.id)
+      .order("route_order");
+
+    let fullRoute: ArrivingTeam["fullRoute"] = [];
+    if (!fullRouteRes.error && fullRouteRes.data) {
+      // Map clue_id to spot name
+      const clueIds = fullRouteRes.data.map((r: any) => r.clue_id);
+      const allCluesRes = await insforge.database
+        .from("clues")
+        .select("id, spot_id")
+        .in("id", clueIds);
+      
+      let spotIds: string[] = [];
+      let clueToSpot: Record<string, string> = {};
+      if (!allCluesRes.error && allCluesRes.data) {
+        clueToSpot = allCluesRes.data.reduce((acc: any, c: any) => ({ ...acc, [c.id]: c.spot_id }), {});
+        spotIds = allCluesRes.data.map((c: any) => c.spot_id);
+      }
+
+      const allSpotsRes = await insforge.database
+        .from("spots")
+        .select("id, name")
+        .in("id", spotIds);
+
+      let spotNames: Record<string, string> = {};
+      if (!allSpotsRes.error && allSpotsRes.data) {
+        spotNames = allSpotsRes.data.reduce((acc: any, s: any) => ({ ...acc, [s.id]: s.name }), {});
+      }
+
+      fullRoute = fullRouteRes.data.map((r: any) => {
+        const sid = clueToSpot[r.clue_id];
+        return {
+          spotName: spotNames[sid] || "Unknown Spot",
+          status: r.status,
+          isCurrent: r.route_order === route.route_order
+        };
+      });
+    }
+
     arriving.push({
       teamId: team.id,
       teamName: team.name,
@@ -78,6 +122,7 @@ export async function fetchSpotLeaderData(spotId: string): Promise<SpotLeaderDat
       clueText: clue.clue_text,
       clueStartedAt: route.clue_started_at,
       timeElapsedMinutes: elapsed,
+      fullRoute,
     });
   }
 

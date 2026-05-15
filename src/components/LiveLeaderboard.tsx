@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Reveal, WordReveal } from "./Reveal";
 import { CountUp } from "./CountUp";
-import { insforge } from "@/lib/insforge";
 import type { EventConfig } from "@/types";
 
 interface TeamRow {
@@ -18,119 +17,25 @@ const MEDAL = ["🥇", "🥈", "🥉"];
 export function LiveLeaderboard() {
   const [config, setConfig] = useState<EventConfig | null>(null);
   const [teams, setTeams] = useState<TeamRow[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState<string>("");
-  const teamsRef = useRef<TeamRow[]>([]);
 
-  const deriveRanks = useCallback((rows: TeamRow[]): TeamRow[] =>
-    [...rows]
-      .sort((a, b) => b.score - a.score || a.penalty - b.penalty)
-      .map((t, i) => ({ ...t, rank: i + 1 })), []);
-
-  const handleTeamUpdate = useCallback((payload: any) => {
-    const { id, name, total_points, total_penalty_seconds } = payload;
-    setTeams((prev) => {
-      const next = [...prev];
-      const idx = next.findIndex((t) => t.id === id);
-      const row: TeamRow = {
-        id,
-        name,
-        score: total_points ?? 0,
-        penalty: total_penalty_seconds ?? 0,
-        rank: 0,
-      };
-      if (idx >= 0) {
-        next[idx] = row;
-      } else {
-        next.push(row);
-      }
-      return deriveRanks(next);
-    });
-  }, [deriveRanks]);
 
   /* ─── Initial fetch + realtime subscription ──────────────── */
+  /* Hardcoded locked state for now */
   useEffect(() => {
-    let cancelled = false;
+    setConfig({
+      id: "hardcoded",
+      event_name: "Treasure Hunt 2026",
+      clue_time_limit_minutes: 1,
+      points_per_clue: 100,
+      max_mini_game_points: 60,
+      hunt_started: false,
+      hunt_started_at: "2026-05-16T07:30:00+06:00",
+      event_start_time: null,
+      created_at: null
+    });
+    setTeams([]);
+  }, []);
 
-    async function init() {
-      /* Fetch event config + initial leaderboard in parallel */
-      const [configResult, teamsResult] = await Promise.all([
-        insforge.database.from("event_config").select("*").limit(1).single(),
-        insforge.database
-          .from("teams")
-          .select("*")
-          .order("total_points", { ascending: false })
-          .order("total_penalty_seconds", { ascending: true }),
-      ]);
-
-      if (cancelled) return;
-
-      if (!configResult.error && configResult.data) {
-        setConfig(configResult.data as EventConfig);
-      } else {
-        setError("Could not load event config");
-      }
-
-      if (!teamsResult.error && teamsResult.data) {
-        const rows: TeamRow[] = (teamsResult.data as any[]).map((t) => ({
-          id: t.id,
-          name: t.name,
-          score: t.total_points ?? 0,
-          penalty: t.total_penalty_seconds ?? 0,
-          rank: 0,
-        }));
-        const ranked = deriveRanks(rows);
-        teamsRef.current = ranked;
-        setTeams(ranked);
-      }
-
-      /* Connect realtime + subscribe to leaderboard channel */
-      try {
-        await insforge.realtime.connect();
-        const sub = await insforge.realtime.subscribe("leaderboard");
-        if (!cancelled && sub.ok) {
-          insforge.realtime.on("team_updated", handleTeamUpdate);
-        }
-      } catch {
-        /* realtime is best-effort — stale data still shown */
-      }
-    }
-
-    init();
-
-    return () => {
-      cancelled = true;
-      insforge.realtime.off("team_updated", handleTeamUpdate);
-      insforge.realtime.unsubscribe("leaderboard");
-      insforge.realtime.disconnect();
-    };
-  }, [handleTeamUpdate, deriveRanks]);
-
-  /* ─── Countdown till hunt starts ─────────────────────────── */
-  useEffect(() => {
-    if (!config || config.hunt_started) return;
-    if (!config.hunt_started_at) return;
-
-    const tick = () => {
-      const now = Date.now();
-      const target = new Date(config.hunt_started_at!).getTime();
-      const diff = target - now;
-      if (diff <= 0) {
-        setCountdown("00:00:00");
-        return;
-      }
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
-      setCountdown(
-        `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
-      );
-    };
-
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [config]);
 
   const isLocked = !config?.hunt_started;
 
@@ -163,12 +68,6 @@ export function LiveLeaderboard() {
           </h2>
         </div>
 
-        {error && (
-          <p className="mt-8 text-center text-[15px] font-semibold" style={{ color: "var(--fg-muted)" }}>
-            {error}
-          </p>
-        )}
-
         {isLocked ? (
           <>
             <motion.div
@@ -199,22 +98,6 @@ export function LiveLeaderboard() {
                   : "The start time hasn't been set yet."}
               </p>
 
-              {config?.hunt_started_at && (
-                <div className="mt-8">
-                  <p className="text-[11px] font-extrabold uppercase tracking-[0.22em]" style={{ color: "var(--fg-muted)" }}>
-                    Starts in
-                  </p>
-                  <motion.p
-                    key={countdown}
-                    initial={{ scale: 1.1, opacity: 0.6 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    className="mt-2 font-display text-[56px] font-black tabular-nums leading-none tracking-tight sm:text-[64px]"
-                    style={{ color: "var(--color-brand-gold)" }}
-                  >
-                    {countdown || "--:--:--"}
-                  </motion.p>
-                </div>
-              )}
 
               <div
                 aria-hidden

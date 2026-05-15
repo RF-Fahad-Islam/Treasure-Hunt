@@ -79,7 +79,7 @@ export async function lookupByRoll(roll: string) {
 
   const { data: squad, error: squadErr } = await insforge.database
     .from("participants")
-    .select("name, is_leader")
+    .select("name, is_leader, avatar_emoji, avatar_color")
     .eq("team_id", participant.team_id)
     .order("name");
 
@@ -88,7 +88,7 @@ export async function lookupByRoll(roll: string) {
   return {
     participant,
     team,
-    members: (squad ?? []) as { name: string; is_leader: boolean }[],
+    members: (squad ?? []) as { name: string; is_leader: boolean; avatar_emoji: string | null; avatar_color: string | null }[],
   };
 }
 
@@ -290,4 +290,64 @@ export async function adminDeactivateSession(sessionId: string): Promise<void> {
     .from("sessions")
     .update({ is_active: false })
     .eq("id", sessionId);
+}
+
+/* ─── Magic Login Tokens ───────────────────────────────────────── */
+
+export async function generateLoginToken(
+  targetRole: "team" | "spot-leader",
+  targetId: string,
+  metadata?: Record<string, any>,
+  expiresInDays = 7,
+): Promise<string> {
+  const token = generateToken();
+  const expiresAt = new Date(Date.now() + expiresInDays * 86400000).toISOString();
+
+  const { error } = await insforge.database.from("login_tokens").insert([{
+    token,
+    target_role: targetRole,
+    target_id: targetId,
+    metadata: metadata ?? {},
+    expires_at: expiresAt,
+  }]);
+
+  if (error) throw new Error(`Failed to create login token: ${error.message}`);
+  return token;
+}
+
+export async function consumeLoginToken(token: string): Promise<{
+  targetRole: "team" | "spot-leader";
+  targetId: string;
+  metadata: Record<string, any>;
+} | null> {
+  const { data, error } = await insforge.database
+    .from("login_tokens")
+    .select("*")
+    .eq("token", token)
+    .limit(1);
+
+  if (error || !data || data.length === 0) return null;
+
+  const row = data[0] as {
+    id: string;
+    target_role: string;
+    target_id: string;
+    metadata: Record<string, any>;
+    used: boolean;
+    expires_at: string;
+  };
+
+  if (row.used) return null;
+  if (new Date(row.expires_at).getTime() < Date.now()) return null;
+
+  await insforge.database
+    .from("login_tokens")
+    .update({ used: true })
+    .eq("id", row.id);
+
+  return {
+    targetRole: row.target_role as "team" | "spot-leader",
+    targetId: row.target_id,
+    metadata: row.metadata ?? {},
+  };
 }

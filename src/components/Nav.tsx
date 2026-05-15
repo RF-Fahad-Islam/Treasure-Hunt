@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Logo } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
 import { RollLookup } from "./RollLookup";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { useSession, useAuthStore } from "@/store/authStore";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -24,13 +25,28 @@ export function Nav() {
 
   const [scrolled, setScrolled] = useState(false);
   const [showLookup, setShowLookup] = useState(false);
+  const [lookupInitialStep, setLookupInitialStep] = useState<"roll" | "register">("roll");
   const [showMenu, setShowMenu] = useState(false);
+  const [confirmDef, setConfirmDef] = useState<{ title: string; message: string; destructive?: boolean } | null>(null);
+  const [confirmHandler, setConfirmHandler] = useState<(() => Promise<void>) | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    
+    const handleOpenLookup = (e: Event) => {
+      const customEvent = e as CustomEvent<"roll" | "register">;
+      setLookupInitialStep(customEvent.detail || "roll");
+      setShowLookup(true);
+    };
+    window.addEventListener("open-lookup", handleOpenLookup);
+    
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("open-lookup", handleOpenLookup);
+    };
   }, []);
 
   const initials = session
@@ -49,7 +65,20 @@ export function Nav() {
 
   return (
     <>
-      <RollLookup open={showLookup} onClose={() => setShowLookup(false)} />
+      <RollLookup open={showLookup} onClose={() => setShowLookup(false)} initialStep={lookupInitialStep} />
+      <ConfirmDialog
+        open={confirmDef !== null}
+        title={confirmDef?.title ?? ""}
+        message={confirmDef?.message ?? ""}
+        destructive={confirmDef?.destructive ?? true}
+        loading={confirmLoading}
+        onConfirm={async () => {
+          if (!confirmHandler) return;
+          setConfirmLoading(true);
+          try { await confirmHandler(); } finally { setConfirmLoading(false); setConfirmDef(null); setConfirmHandler(null); }
+        }}
+        onCancel={() => { setConfirmDef(null); setConfirmHandler(null); }}
+      />
       <header
         className={[
           "fixed inset-x-0 top-0 z-50 transition-all duration-300",
@@ -122,7 +151,11 @@ export function Nav() {
                           🚀 Dashboard
                         </button>
                         <button
-                          onClick={() => { setShowMenu(false); clearSession(); navigate("/"); }}
+                          onClick={() => {
+                            setShowMenu(false);
+                            setConfirmDef({ title: "Logout", message: "Are you sure you want to logout?" });
+                            setConfirmHandler(async () => { clearSession(); navigate("/"); });
+                          }}
                           className="ripple touch-press w-full rounded-xl px-3 py-2.5 text-[13px] font-bold text-left transition-all"
                           style={{ color: "var(--color-brand-red)" }}
                           onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,75,75,0.08)"}
@@ -135,20 +168,33 @@ export function Nav() {
                   )}
                 </div>
               ) : (
-                <button
-                  onClick={() => setShowLookup(true)}
-                  className="group relative inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[12px] font-extrabold uppercase tracking-wide text-white transition active:translate-y-[1px]"
-                  style={{
-                    background: "var(--color-brand-green)",
-                    boxShadow: "0 3px 0 var(--color-brand-green-shadow)",
-                  }}
-                >
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white/70 opacity-75" />
-                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
-                  </span>
-                  Find team
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setLookupInitialStep("register"); setShowLookup(true); }}
+                    className="group relative inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[12px] font-extrabold uppercase tracking-wide transition active:translate-y-[1px]"
+                    style={{
+                      background: "transparent",
+                      color: "var(--fg)",
+                      border: "2px solid var(--border-soft)",
+                    }}
+                  >
+                    Register
+                  </button>
+                  <button
+                    onClick={() => { setLookupInitialStep("roll"); setShowLookup(true); }}
+                    className="group relative inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[12px] font-extrabold uppercase tracking-wide text-white transition active:translate-y-[1px]"
+                    style={{
+                      background: "var(--color-brand-green)",
+                      boxShadow: "0 3px 0 var(--color-brand-green-shadow)",
+                    }}
+                  >
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white/70 opacity-75" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
+                    </span>
+                    Find team
+                  </button>
+                </div>
               )}
             </div>
           </div>

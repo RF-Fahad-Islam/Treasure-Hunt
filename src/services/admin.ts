@@ -1,5 +1,5 @@
 import { insforge } from "@/lib/insforge";
-import type { Participant, Spot, ClueDefinition, EventConfig, Team, TeamRoute } from "@/types";
+import type { Participant, Spot, ClueDefinition, EventConfig, Team, TeamRoute, Registration } from "@/types";
 
 /* ─── Constants ─────────────────────────────────────────────── */
 
@@ -103,14 +103,33 @@ export function generateRoutes(
   clues: ClueDefinition[],
   generatedTeams: GeneratedTeam[]
 ): TeamWithRoute[] {
-  return generatedTeams.map((team) => ({
-    team,
-    route: shuffle(clues).map((clue, idx) => ({
-      clueId: clue.id,
-      spotId: clue.spot_id,
-      order: idx,
-    })),
-  }));
+  // Group clues by spot
+  const cluesBySpot = new Map<string, ClueDefinition[]>();
+  for (const clue of clues) {
+    if (!cluesBySpot.has(clue.spot_id)) cluesBySpot.set(clue.spot_id, []);
+    cluesBySpot.get(clue.spot_id)!.push(clue);
+  }
+
+  const spotIds = Array.from(cluesBySpot.keys());
+
+  return generatedTeams.map((team) => {
+    // For each team, shuffle the spots to create their unique path
+    const shuffledSpots = shuffle(spotIds);
+    
+    // For each spot in their path, pick a random clue
+    const route = shuffledSpots.map((spotId, idx) => {
+      const spotClues = cluesBySpot.get(spotId)!;
+      const randomClue = spotClues[Math.floor(Math.random() * spotClues.length)];
+      
+      return {
+        clueId: randomClue.id,
+        spotId: spotId,
+        order: idx,
+      };
+    });
+
+    return { team, route };
+  });
 }
 
 /* ─── DB writes ────────────────────────────────────────────────── */
@@ -168,11 +187,36 @@ export async function saveRoutes(
       clue_id: r.clueId,
       route_order: r.order,
       status: r.order === 0 ? "active" : "pending",
+      clue_started_at: r.order === 0 ? new Date().toISOString() : null,
     }));
+
+    if (rows.length === 0) continue; // Skip empty routes
 
     const { error } = await insforge.database.from("team_routes").insert(rows);
     if (error) throw new Error(`Failed to save routes for ${tr.team.name}: ${error.message}`);
   }
+}
+
+export async function deployTeamRoute(teamId: string, clueIds: string[]): Promise<void> {
+  // First, delete existing pending routes or all routes for this team
+  await insforge.database.from("team_routes").delete().eq("team_id", teamId);
+
+  // Reset team progress
+  await insforge.database.from("teams").update({ 
+    current_clue_index: 0,
+    hunt_completed: false
+  }).eq("id", teamId);
+
+  const rows = clueIds.map((clueId, idx) => ({
+    team_id: teamId,
+    clue_id: clueId,
+    route_order: idx,
+    status: idx === 0 ? "active" : "pending",
+    clue_started_at: idx === 0 ? new Date().toISOString() : null,
+  }));
+
+  const { error } = await insforge.database.from("team_routes").insert(rows);
+  if (error) throw new Error(`Failed to deploy route: ${error.message}`);
 }
 
 /* ─── Participant management ────────────────────────────────── */
@@ -237,6 +281,9 @@ export async function createSpot(data: {
   spot_leader_code: string;
   has_mini_game?: boolean;
   mini_game_description?: string;
+  latitude?: number;
+  longitude?: number;
+  radius_meters?: number;
 }): Promise<void> {
   const { error } = await insforge.database.from("spots").insert([{
     name: data.name,
@@ -245,6 +292,9 @@ export async function createSpot(data: {
     spot_leader_code: data.spot_leader_code,
     has_mini_game: data.has_mini_game ?? false,
     mini_game_description: data.mini_game_description ?? null,
+    latitude: data.latitude ?? null,
+    longitude: data.longitude ?? null,
+    radius_meters: data.radius_meters ?? null,
   }]);
   if (error) throw new Error(`Failed to create spot: ${error.message}`);
 }
@@ -306,8 +356,97 @@ export async function updateEventConfig(data: Partial<EventConfig>): Promise<voi
   }
 }
 
+/* ─── Registration management ───────────────────────────────── */
+
+export async function fetchRegistrations(): Promise<Registration[]> {
+  const { data, error } = await insforge.database
+    .from("registrations")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function approveRegistration(id: string): Promise<Registration> {
+  const { data: reg, error: fetchErr } = await insforge.database
+    .from("registrations")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (fetchErr) throw new Error("Registration not found");
+  const registration = reg as Registration;
+  if (registration.approved) throw new Error("Already approved");
+
+  await insforge.database.from("participants").insert([{
+    name: registration.name,
+    roll: registration.roll,
+    email: registration.email,
+    is_leader: false,
+  }]);
+
+  const { error: updateErr } = await insforge.database
+    .from("registrations")
+    .update({ approved: true })
+    .eq("id", id);
+  if (updateErr) throw new Error(updateErr.message);
+
+  return { ...registration, approved: true };
+}
+
+export async function deleteRegistration(id: string): Promise<void> {
+  const { error } = await insforge.database.from("registrations").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export async function resetAllHuntData(): Promise<void> {
   await insforge.database.from("team_routes").delete().neq("id", "00000000-0000-0000-0000-000000000000");
   await insforge.database.from("participants").update({ team_id: null, is_leader: false }).neq("id", "00000000-0000-0000-0000-000000000000");
   await insforge.database.from("teams").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+}
+
+/* ─── Magic login: bulk push email for teams ──────────────────── */
+
+export interface TeamParticipantWithEmail {
+  participantId: string;
+  name: string;
+  email: string;
+  roll: string;
+  teamId: string;
+  teamName: string;
+  teamCode: string;
+}
+
+export async function fetchTeamParticipantsWithEmails(): Promise<TeamParticipantWithEmail[]> {
+  const { data: participants, error } = await insforge.database
+    .from("participants")
+    .select("id, name, roll, email, team_id")
+    .not("team_id", "is", null)
+    .not("email", "is", null);
+
+  if (error) throw new Error(error.message);
+  if (!participants || participants.length === 0) return [];
+
+  const teamIds = [...new Set(participants.map((p: any) => p.team_id))];
+  const { data: teams, error: teamErr } = await insforge.database
+    .from("teams")
+    .select("id, name, team_code")
+    .in("id", teamIds);
+
+  if (teamErr) throw new Error(teamErr.message);
+  const teamMap = new Map((teams ?? []).map((t: any) => [t.id, t]));
+
+  return (participants as any[])
+    .filter((p) => p.email)
+    .map((p) => {
+      const t = teamMap.get(p.team_id) ?? { name: "Unknown", team_code: "??????" };
+      return {
+        participantId: p.id,
+        name: p.name,
+        email: p.email,
+        roll: p.roll ?? "",
+        teamId: p.team_id,
+        teamName: t.name,
+        teamCode: t.team_code,
+      };
+    });
 }

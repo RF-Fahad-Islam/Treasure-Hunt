@@ -1,5 +1,5 @@
 import { insforge } from "@/lib/insforge";
-import type { Team, TeamRoute, Spot, ClueDefinition, EventConfig } from "@/types";
+import type { Team, TeamRoute, Spot, ClueDefinition, EventConfig, Participant } from "@/types";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
@@ -141,6 +141,33 @@ export async function keepSearching(routeId: string): Promise<void> {
     .from("team_routes")
     .update({ status: "active" })
     .eq("id", routeId);
+
+  if (error) throw new Error(error.message);
+}
+
+/* ─── Team members ──────────────────────────────────────────── */
+
+export async function fetchTeamMembers(teamId: string): Promise<Participant[]> {
+  const { data, error } = await insforge.database
+    .from("participants")
+    .select("*")
+    .eq("team_id", teamId)
+    .order("name");
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+/* ─── Update own avatar ─────────────────────────────────────── */
+
+export async function updateMyAvatar(
+  participantId: string,
+  avatar: { avatar_emoji: string; avatar_color: string }
+): Promise<void> {
+  const { error } = await insforge.database
+    .from("participants")
+    .update(avatar)
+    .eq("id", participantId);
 
   if (error) throw new Error(error.message);
 }

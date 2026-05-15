@@ -58,7 +58,7 @@ function InputField({
       <input
         id={id} type={type} placeholder={placeholder} value={value}
         onChange={(e) => onChange(e.target.value)} autoComplete={autoComplete} disabled={disabled}
-        className="w-full rounded-2xl border-2 px-5 py-4 text-[16px] font-semibold outline-none transition-all duration-200 placeholder:font-normal disabled:opacity-50"
+        className="w-full rounded-[20px] border-2 px-6 py-5 text-[17px] font-bold outline-none transition-all duration-200 placeholder:font-normal disabled:opacity-50"
         style={{
           background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)",
           boxShadow: "var(--shadow-card)",
@@ -86,22 +86,22 @@ function RoleCard({
       type="button" onClick={onSelect} whileTap={{ scale: 0.94 }}
       animate={selected ? { y: -4 } : { y: 0 }}
       transition={{ type: "spring", stiffness: 400, damping: 22 }}
-      className="flex flex-1 flex-col items-center gap-2 rounded-2xl border-2 px-3 py-5 text-center transition-all duration-200"
+      className="flex flex-1 flex-col items-center gap-3 rounded-[24px] border-2 px-4 py-6 text-center transition-all duration-200"
       style={{
         background: selected ? "var(--surface)" : "transparent",
         borderColor: selected ? role.accentVar : "var(--border-soft)",
-        boxShadow: selected ? `0 8px 28px -4px ${role.shadowColor}, 0 4px 0 ${role.shadowColor}` : "none",
+        boxShadow: selected ? `0 10px 0 0 ${role.shadowColor}` : "none",
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled && !selected ? 0.6 : 1,
       }}
       disabled={disabled}
       aria-pressed={selected}
     >
-      <span className="text-4xl leading-none">{role.emoji}</span>
-      <span className="text-[15px] font-extrabold leading-none" style={{ color: selected ? role.accentVar : "var(--fg)" }}>
+      <span className="text-5xl leading-none">{role.emoji}</span>
+      <span className="text-[17px] font-black leading-none" style={{ color: selected ? role.accentVar : "var(--fg)" }}>
         {role.label}
       </span>
-      <span className="text-[12px] font-semibold" style={{ color: "var(--fg-muted)" }}>
+      <span className="text-[12px] font-bold" style={{ color: "var(--fg-muted)" }}>
         {role.sub}
       </span>
     </motion.button>
@@ -141,7 +141,7 @@ function TeamForm({ isLoading, error, onSubmit }: {
       <motion.button
         data-sound="success"
         whileTap={canSubmit ? { scale: 0.96 } : {}}
-        type="submit" className="btn-press ripple btn-primary btn-press--lg mt-2 w-full rounded-2xl py-4 text-[16px]"
+        type="submit" className="btn-press ripple btn-primary btn-press--lg mt-2 w-full rounded-[20px] py-5 text-[18px] font-black"
         disabled={!canSubmit}
         style={!canSubmit ? { opacity: 0.5, cursor: "not-allowed" } : {}}
       >
@@ -174,11 +174,11 @@ function CredentialsForm({
       <motion.button
         data-sound="success"
         whileTap={canSubmit ? { scale: 0.96 } : {}}
-        type="submit" className="btn-press ripple btn-press--lg mt-2 w-full rounded-2xl py-4 text-[16px] text-white"
+        type="submit" className="btn-press ripple btn-press--lg mt-2 w-full rounded-[20px] py-5 text-[18px] font-black text-white"
         disabled={!canSubmit}
         style={{
           background: accent,
-          boxShadow: !canSubmit ? "none" : `0 6px 0 0 color-mix(in srgb, ${accent} 60%, black)`,
+          boxShadow: !canSubmit ? "none" : `0 8px 0 0 color-mix(in srgb, ${accent} 60%, black)`,
           opacity: !canSubmit ? 0.5 : 1,
           cursor: !canSubmit ? "not-allowed" : "pointer",
         }}

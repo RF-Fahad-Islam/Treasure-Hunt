@@ -13,8 +13,8 @@ export function ChartCard({ title, subtitle, accent, children, className = "" }:
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`card flex flex-col gap-4 p-5 ${className}`}
-      style={{ background: "var(--surface)" }}
+      className={`card flex flex-col gap-4 p-5 relative overflow-hidden ${className}`}
+      style={{ background: "var(--surface)", borderTop: `4px solid ${accent}` }}
     >
       <div>
         <h3 className="text-[13px] font-extrabold uppercase tracking-[0.18em]" style={{ color: accent }}>

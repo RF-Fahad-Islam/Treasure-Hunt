@@ -8,6 +8,8 @@ import {
 import { Bar } from "react-chartjs-2";
 import { ChartCard } from "./ChartCard";
 
+import { resolveBrandColor } from "@/utils/colors";
+
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
 interface Datum {
@@ -64,7 +66,7 @@ export function BarChartCard({
               {
                 data: data.map((d) => d.value),
                 backgroundColor: data.map(
-                  (d, i) => d.color ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length]
+                  (d, i) => resolveBrandColor(d.color ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length])
                 ),
                 borderRadius: 8,
                 borderSkipped: false,

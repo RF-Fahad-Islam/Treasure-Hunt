@@ -18,6 +18,8 @@ export interface Team {
   total_solve_time_seconds: number | null;
   current_clue_index: number | null;
   hunt_completed: boolean | null;
+  is_disqualified: boolean | null;
+  last_active_at: string | null;
   created_at: string | null;
 }
 
@@ -29,6 +31,9 @@ export interface Participant {
   phone: string | null;
   team_id: string | null;
   is_leader: boolean | null;
+  avatar_emoji: string | null;
+  avatar_color: string | null;
+  preferences: Record<string, any> | null;
   created_at: string | null;
 }
 
@@ -40,6 +45,9 @@ export interface Spot {
   spot_leader_code: string;
   has_mini_game: boolean | null;
   mini_game_description: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  radius_meters: number | null;
   created_at: string | null;
 }
 
@@ -49,6 +57,16 @@ export interface ClueDefinition {
   clue_text: string;
   image_url: string | null;
   difficulty: string | null;
+  created_at: string | null;
+}
+
+export interface TeamLocation {
+  id: string;
+  team_id: string;
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+  captured_at: string;
   created_at: string | null;
 }
 
@@ -77,6 +95,27 @@ export interface EventConfig {
   max_mini_game_points: number;
   hunt_started: boolean;
   hunt_started_at: string | null;
+  event_start_time: string | null;
+  created_at: string | null;
+}
+
+export interface Registration {
+  id: string;
+  name: string;
+  roll: string;
+  email: string;
+  approved: boolean;
+  created_at: string | null;
+}
+
+export interface Notification {
+  id: string;
+  team_id: string;
+  type: string;
+  title: string;
+  message: string;
+  points: number;
+  read: boolean;
   created_at: string | null;
 }
 

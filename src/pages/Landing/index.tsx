@@ -4,8 +4,11 @@ import { About } from "@/components/About";
 import { HowItWorks } from "@/components/HowItWorks";
 import { SpotsMarquee } from "@/components/SpotsMarquee";
 import { LiveLeaderboard } from "@/components/LiveLeaderboard";
+import { CountdownTimer } from "@/components/CountdownTimer";
+import { BottomCTA } from "@/components/BottomCTA";
 import { Footer } from "@/components/Footer";
 import { Backdrop } from "@/components/Backdrop";
+import { MiniGame } from "@/components/MiniGame";
 
 /**
  * Landing page — the original App.tsx content, moved here unchanged.
@@ -22,6 +25,9 @@ export default function LandingPage() {
         <HowItWorks />
         <SpotsMarquee />
         <LiveLeaderboard />
+        <CountdownTimer />
+        <MiniGame />
+        <BottomCTA />
       </main>
       <Footer />
     </div>

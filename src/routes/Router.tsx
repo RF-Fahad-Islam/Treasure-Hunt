@@ -10,6 +10,7 @@ import TeamDashboardPage from "@/pages/TeamDashboard";
 import SpotLeaderPage from "@/pages/SpotLeader";
 import AdminPage from "@/pages/Admin";
 import ResultsPage from "@/pages/Results";
+import MagicLoginPage from "@/pages/MagicLogin";
 
 /**
  * If already logged in and tries to visit /login,
@@ -88,6 +89,8 @@ export function Router() {
         />
 
         <Route path="/results" element={<PageTransition><ResultsPage /></PageTransition>} />
+
+        <Route path="/magic-login/:token" element={<PageTransition><MagicLoginPage /></PageTransition>} />
 
         {/* Catch-all → landing */}
         <Route path="*" element={<Navigate to="/" replace />} />

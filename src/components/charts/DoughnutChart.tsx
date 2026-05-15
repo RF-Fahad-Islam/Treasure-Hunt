@@ -6,6 +6,8 @@ import {
 import { Doughnut } from "react-chartjs-2";
 import { ChartCard } from "./ChartCard";
 
+import { resolveBrandColor } from "@/utils/colors";
+
 ChartJS.register(ArcElement, Tooltip);
 
 interface Datum {
@@ -53,7 +55,7 @@ export function DoughnutChart({
               datasets: [
                 {
                   data: data.map((d) => d.value),
-                  backgroundColor: data.map((d) => d.color),
+                  backgroundColor: data.map((d) => resolveBrandColor(d.color)),
                   borderWidth: 0,
                 },
               ],
