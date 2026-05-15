@@ -538,11 +538,12 @@ function RegisterForm({
         throw dbError;
       }
 
-      insforge.emails.send({
+      const { error: emailErr } = await insforge.emails.send({
         to: email.trim(),
         subject: "Welcome to Treasure Hunt 2026!",
         html: welcomeEmailHtml({ name: name.trim(), roll: roll.trim() }),
-      }).catch(() => {});
+      });
+      if (emailErr) console.error("Welcome email failed:", emailErr.message);
 
       onSuccess();
     } catch (err: any) {
