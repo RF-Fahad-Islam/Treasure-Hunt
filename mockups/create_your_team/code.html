@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Treasure Hunt - Create Your Team</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;700;800&amp;family=Lexend:wght@700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error-container": "#ffdad6",
+                        "text-secondary": "#777777",
+                        "reward-gold": "#FFC800",
+                        "surface-container-low": "#eef7e3",
+                        "text-primary": "#2B2B2B",
+                        "surface-container": "#e9f1dd",
+                        "tertiary": "#9a397a",
+                        "on-tertiary-container": "#7b1f60",
+                        "on-primary-fixed-variant": "#1f5100",
+                        "inverse-primary": "#6be026",
+                        "surface-variant": "#dde5d2",
+                        "primary-container": "#58cc02",
+                        "surface": "#f4fce8",
+                        "secondary-fixed": "#c8e6ff",
+                        "surface-container-highest": "#dde5d2",
+                        "surface-bright": "#f4fce8",
+                        "on-secondary-container": "#004666",
+                        "tertiary-fixed": "#ffd8eb",
+                        "inverse-surface": "#2b3326",
+                        "surface-background": "#F7F7F7",
+                        "inverse-on-surface": "#ecf4e0",
+                        "primary": "#2b6c00",
+                        "on-tertiary-fixed-variant": "#7d2061",
+                        "secondary-container": "#2fb8ff",
+                        "background": "#f4fce8",
+                        "danger-red": "#FF4B4B",
+                        "surface-tint": "#2b6c00",
+                        "secondary": "#006590",
+                        "on-surface-variant": "#3f4a36",
+                        "on-background": "#171e12",
+                        "error": "#ba1a1a",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary-container": "#1e5000",
+                        "on-error": "#ffffff",
+                        "surface-card": "#FFFFFF",
+                        "primary-fixed-dim": "#6be026",
+                        "tertiary-fixed-dim": "#ffaedd",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed-dim": "#88ceff",
+                        "on-secondary-fixed": "#001e2e",
+                        "on-secondary-fixed-variant": "#004c6e",
+                        "tertiary-container": "#ff8ed4",
+                        "surface-container-high": "#e3ebd8",
+                        "outline-variant": "#becbb1",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "surface-dim": "#d5ddca",
+                        "outline": "#6f7b64",
+                        "on-surface": "#171e12",
+                        "on-error-container": "#93000a",
+                        "primary-fixed": "#87fe45",
+                        "on-tertiary-fixed": "#3b002c",
+                        "on-primary-fixed": "#082100"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "md": "24px",
+                        "gutter": "16px",
+                        "xl": "48px",
+                        "xs": "8px",
+                        "xxl": "64px",
+                        "unit": "8px",
+                        "sm": "16px",
+                        "lg": "32px",
+                        "container-margin": "24px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Nunito Sans"],
+                        "timer-display-mobile": ["Lexend"],
+                        "label-bold": ["Lexend"],
+                        "timer-display": ["Lexend"],
+                        "headline-lg": ["Nunito Sans"],
+                        "headline-xl-mobile": ["Nunito Sans"],
+                        "headline-xl": ["Nunito Sans"],
+                        "body-lg": ["Nunito Sans"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "timer-display-mobile": ["48px", {"lineHeight": "56px", "fontWeight": "800"}],
+                        "label-bold": ["14px", {"lineHeight": "20px", "fontWeight": "700"}],
+                        "timer-display": ["72px", {"lineHeight": "80px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "headline-lg": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                        "headline-xl-mobile": ["32px", {"lineHeight": "40px", "fontWeight": "800"}],
+                        "headline-xl": ["48px", {"lineHeight": "56px", "fontWeight": "800"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .btn-shadow {
+            box-shadow: 0 4px 0 0 #2b6c00;
+        }
+        .btn-shadow:active {
+            box-shadow: 0 0 0 0 #2b6c00;
+            transform: translateY(4px);
+        }
+        .input-shadow {
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .input-focus-shadow:focus {
+            box-shadow: 0 0 0 4px rgba(88, 204, 2, 0.2);
+            border-color: #58cc02;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface-background min-h-screen flex flex-col font-body-md text-text-primary antialiased">
+<!-- Top Navigation Placeholder (Hidden for Transactional/Onboarding Flow as per rules, but keeping a simple back arrow for context) -->
+<header class="w-full px-container-margin py-md flex items-center justify-start absolute top-0 left-0">
+<a aria-label="Go back" class="w-12 h-12 flex items-center justify-center rounded-full bg-surface-container-lowest text-text-primary shadow-sm hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-size: 24px;">arrow_back</span>
+</a>
+</header>
+<main class="flex-grow flex flex-col items-center justify-center px-container-margin py-xxl w-full max-w-md mx-auto mt-xl">
+<!-- Hero Illustration / Icon -->
+<div class="mb-lg w-24 h-24 bg-secondary-fixed rounded-3xl flex items-center justify-center shadow-lg transform -rotate-3">
+<span class="material-symbols-outlined text-secondary text-5xl" style="font-variation-settings: 'FILL' 1;">groups</span>
+</div>
+<!-- Heading & Description -->
+<div class="text-center mb-xl w-full">
+<h1 class="font-headline-xl-mobile md:font-headline-xl text-headline-xl-mobile md:text-headline-xl text-text-primary mb-sm">
+                Create Your Team
+            </h1>
+<p class="font-body-lg text-body-lg text-text-secondary px-xs">
+                Form a squad with your friends to compete in the ultimate scavenger hunt and climb the leaderboard together!
+            </p>
+</div>
+<!-- Form Area -->
+<form action="#" class="w-full space-y-xl" method="POST">
+<!-- Team Name Input -->
+<div class="relative w-full">
+<label class="block font-label-bold text-label-bold text-text-primary mb-xs ml-xs uppercase tracking-wide opacity-80" for="team-name">Team Name</label>
+<div class="relative">
+<input class="w-full bg-surface-container-lowest border-2 border-surface-container-highest rounded-3xl py-4 px-6 font-body-lg text-body-lg text-text-primary placeholder:text-outline-variant outline-none transition-all input-shadow input-focus-shadow text-center focus:placeholder-transparent" id="team-name" name="team-name" placeholder="e.g. The Code Breakers" required="" type="text"/>
+</div>
+</div>
+<!-- Submit Button Area -->
+<div class="pt-sm w-full flex flex-col items-center gap-sm">
+<button class="w-full bg-primary-container text-surface-container-lowest rounded-full py-4 px-8 font-label-bold text-label-bold uppercase tracking-wider flex items-center justify-center gap-xs transition-transform btn-shadow" type="submit">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">group_add</span>
+                    CREATE TEAM
+                </button>
+<!-- Cancel / Back Link -->
+<a class="font-label-bold text-label-bold text-text-secondary hover:text-text-primary transition-colors mt-xs inline-block py-2" href="#">
+                    Cancel &amp; Return to Join
+                </a>
+</div>
+</form>
+</main>
+</body></html>

@@ -180,7 +180,7 @@ export function ExpiredOverlay({
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.55, duration: 0.45, ease }}
               onClick={onContinue}
-              className="btn-press btn-press--lg btn-primary w-full"
+              className="btn-press ripple btn-press--lg btn-primary w-full"
               autoFocus
             >
               <span>Get next clue</span>

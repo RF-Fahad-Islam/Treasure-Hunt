@@ -12,6 +12,7 @@ type Props = {
   direction?: Direction;
   once?: boolean;
   className?: string;
+  style?: React.CSSProperties;
   as?: "div" | "section" | "span" | "li" | "p" | "h2" | "h3";
 };
 
@@ -26,6 +27,7 @@ export function Reveal({
   x,
   once = true,
   className,
+  style,
   as = "div",
 }: Props) {
   const offset = 28;
@@ -51,6 +53,7 @@ export function Reveal({
       viewport={{ once, margin: "-80px" }}
       transition={{ duration, delay, ease }}
       className={className}
+      style={style}
     >
       {children}
     </MotionTag>

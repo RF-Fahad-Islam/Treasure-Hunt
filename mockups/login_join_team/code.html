@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Treasure Hunt - Join Team</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;700;800&amp;family=Nunito+Sans:wght@400;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed-variant": "#1f5100",
+                        "inverse-primary": "#6be026",
+                        "on-primary-container": "#1e5000",
+                        "surface-container-highest": "#dde5d2",
+                        "on-primary-fixed": "#082100",
+                        "error-container": "#ffdad6",
+                        "secondary": "#006590",
+                        "surface-card": "#FFFFFF",
+                        "surface-bright": "#f4fce8",
+                        "primary-container": "#58cc02",
+                        "inverse-on-surface": "#ecf4e0",
+                        "outline": "#6f7b64",
+                        "surface-background": "#F7F7F7",
+                        "secondary-fixed-dim": "#88ceff",
+                        "on-tertiary-container": "#7b1f60",
+                        "surface-container-lowest": "#ffffff",
+                        "reward-gold": "#FFC800",
+                        "primary-fixed": "#87fe45",
+                        "error": "#ba1a1a",
+                        "on-tertiary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed-variant": "#7d2061",
+                        "on-primary": "#ffffff",
+                        "on-background": "#171e12",
+                        "on-surface-variant": "#3f4a36",
+                        "tertiary-container": "#ff8ed4",
+                        "background": "#f4fce8",
+                        "danger-red": "#FF4B4B",
+                        "outline-variant": "#becbb1",
+                        "tertiary-fixed": "#ffd8eb",
+                        "on-surface": "#171e12",
+                        "on-secondary-container": "#004666",
+                        "surface": "#f4fce8",
+                        "surface-dim": "#d5ddca",
+                        "tertiary-fixed-dim": "#ffaedd",
+                        "on-error": "#ffffff",
+                        "inverse-surface": "#2b3326",
+                        "secondary-fixed": "#c8e6ff",
+                        "surface-container-high": "#e3ebd8",
+                        "primary": "#2b6c00",
+                        "secondary-container": "#2fb8ff",
+                        "on-secondary-fixed": "#001e2e",
+                        "surface-container": "#e9f1dd",
+                        "surface-variant": "#dde5d2",
+                        "surface-container-low": "#eef7e3",
+                        "on-secondary-fixed-variant": "#004c6e",
+                        "text-secondary": "#777777",
+                        "primary-fixed-dim": "#6be026",
+                        "text-primary": "#2B2B2B",
+                        "on-secondary": "#ffffff",
+                        "surface-tint": "#2b6c00",
+                        "on-tertiary-fixed": "#3b002c",
+                        "tertiary": "#9a397a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "lg": "32px",
+                        "xs": "8px",
+                        "sm": "16px",
+                        "xl": "48px",
+                        "unit": "8px",
+                        "md": "24px",
+                        "container-margin": "24px",
+                        "xxl": "64px"
+                    },
+                    "fontFamily": {
+                        "label-bold": ["Lexend"],
+                        "body-md": ["Nunito Sans"],
+                        "body-lg": ["Nunito Sans"],
+                        "headline-lg": ["Nunito Sans"],
+                        "timer-display-mobile": ["Lexend"],
+                        "headline-xl": ["Nunito Sans"],
+                        "headline-xl-mobile": ["Nunito Sans"],
+                        "timer-display": ["Lexend"]
+                    },
+                    "fontSize": {
+                        "label-bold": ["14px", {"lineHeight": "20px", "fontWeight": "700"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "headline-lg": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                        "timer-display-mobile": ["48px", {"lineHeight": "56px", "fontWeight": "800"}],
+                        "headline-xl": ["48px", {"lineHeight": "56px", "fontWeight": "800"}],
+                        "headline-xl-mobile": ["32px", {"lineHeight": "40px", "fontWeight": "800"}],
+                        "timer-display": ["72px", {"lineHeight": "80px", "letterSpacing": "-0.02em", "fontWeight": "800"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .btn-3d {
+            box-shadow: 0 4px 0 0 #2b6c00; /* Darker shade of primary-container for the 3D effect */
+        }
+        .btn-3d:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 0 #2b6c00;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface-background text-on-surface min-h-screen flex flex-col items-center justify-center font-body-md">
+<!-- Main Container -->
+<main class="w-full max-w-[480px] px-container-margin py-xl flex flex-col items-center text-center">
+<!-- App Logo Area -->
+<div class="mb-lg">
+<div class="w-32 h-32 bg-primary-container rounded-full flex items-center justify-center shadow-lg border-4 border-surface-container-highest mx-auto mb-xs overflow-hidden">
+<img alt="App Logo" class="w-full h-full object-cover" data-alt="A stylized, playful 3D rendering of a treasure map and compass, floating in a bright, clean studio environment. The colors are vibrant and saturated, featuring bright greens, crisp whites, and golden accents, perfectly matching a gamified, mobile-first design system. Soft, diffused lighting creates gentle shadows and highlights the tactile, rounded edges of the objects." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBdTbB41l2NtdQxJ1YPUgoCTkQXz-Gia7drvNHKPpfy-T8l05MEDCDhi5vG_Dn8Urr3qkpRYcB4fAFWySs5bPxk0qNDgInLIOmmkvBnw6sFgmYevLLlTLKsh1XQlsStNwGMnQAentShV7badYyAmBvauLkHt4sq1g59TQd8yMIBoWXAOWo-aQiGPmsU7nk9Hnek2NlS-s3MtJx5oc9O1PgtidlcTwTVxEvOAQ2YIhY4NBNJiW3rhMv6z2UgbIlazg9YZF3kBCeEHaTt"/>
+</div>
+<h1 class="font-headline-xl-mobile text-headline-xl-mobile md:font-headline-xl md:text-headline-xl text-primary tracking-tight">Treasure Hunt</h1>
+</div>
+<!-- Heading -->
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg mb-xl text-on-surface">Enter the Hunt</h2>
+<!-- Input Form -->
+<div class="w-full flex flex-col gap-md">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-on-surface-variant text-2xl">
+                    vpn_key
+                </span>
+<input class="w-full h-16 pl-12 pr-sm rounded-[24px] border-2 border-outline-variant bg-surface-card font-body-lg text-body-lg text-center uppercase focus:border-primary-container focus:ring-0 shadow-sm outline-none transition-colors placeholder:text-on-surface-variant/50 placeholder:normal-case" placeholder="Team Code" type="text"/>
+</div>
+<!-- Primary Action Button -->
+<button class="w-full h-16 bg-primary-container text-on-primary-container font-label-bold text-label-bold uppercase rounded-full btn-3d transition-transform flex items-center justify-center gap-xs">
+                JOIN TEAM
+                <span class="material-symbols-outlined">
+                    arrow_forward
+                </span>
+</button>
+<p class="font-body-md text-body-md text-text-secondary mt-xs">
+                Don't have a code? <a class="text-primary font-label-bold text-label-bold hover:underline" href="#">Create a team</a>
+</p>
+</div>
+</main>
+</body></html>

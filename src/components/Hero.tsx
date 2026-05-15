@@ -1,7 +1,7 @@
 import { motion } from "motion/react";
 import { CountUp } from "./CountUp";
 import { Gyro3D } from "./Gyro3D";
-import { HeroBadge } from "./HeroBadge";
+
 
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
@@ -38,10 +38,10 @@ export function Hero() {
       id="top"
       className="relative flex min-h-[100svh] items-center px-5 pt-28 pb-16 sm:px-8"
     >
-      {/* Backdrop emblem — dark mode only */}
+      {/* Backdrop emblem */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-0 hidden items-center justify-center dark:flex"
+        className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center"
       >
         <div className="opacity-[0.55] sm:opacity-60">
           <Gyro3D size={460} className="hidden sm:block" />
@@ -56,14 +56,7 @@ export function Hero() {
           transition={{ staggerChildren: 0.08, delayChildren: 0.1 }}
           className="flex flex-col items-center gap-6 sm:gap-8"
         >
-          {/* Light-mode hero badge */}
-          <motion.div
-            variants={fadeUp}
-            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-            className="block dark:hidden"
-          >
-            <HeroBadge />
-          </motion.div>
+
 
           {/* Event tag */}
           <motion.div
@@ -125,11 +118,16 @@ export function Hero() {
             transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
             className="mt-1 flex w-full max-w-sm flex-col gap-3 sm:max-w-none sm:flex-row sm:justify-center"
           >
-            <a href="#roll" className="btn-press btn-press--lg btn-primary">
-              <span>Enter your roll</span>
+            <button 
+              onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent("open-lookup", { detail: "roll" })); }}
+              data-sound="heavy" 
+              className="btn-press ripple btn-press--lg btn-primary"
+            >
+              <span>Find your team</span>
               <Arrow />
-            </a>
-            <a href="#how" className="btn-press btn-press--lg btn-secondary">
+            </button>
+
+            <a href="#how" className="btn-press ripple btn-press--lg btn-secondary">
               How it works
             </a>
           </motion.div>
