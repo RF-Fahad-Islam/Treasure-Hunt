@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { getAvatarUrl } from "@/lib/avatar";
-import { NotificationBell } from "@/components/NotificationBell";
 import { useAuthStore } from "@/store/authStore";
 import type { Participant } from "@/types";
 
@@ -10,13 +9,11 @@ interface Props {
   teamSeed: string;
   teamMembers: Participant[];
   hasGps: boolean;
-  teamId: string;
-  onNewPoints: (points: number) => void;
   onTeamNameEdit: () => void;
   onTeamAvatarEdit: () => void;
 }
 
-export function OSStatusBar({ teamName, teamSeed, teamMembers, hasGps, teamId, onNewPoints, onTeamNameEdit, onTeamAvatarEdit }: Props) {
+export function OSStatusBar({ teamName, teamSeed, teamMembers, hasGps, onTeamNameEdit, onTeamAvatarEdit }: Props) {
   const [time, setTime] = useState(new Date());
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -58,7 +55,6 @@ export function OSStatusBar({ teamName, teamSeed, teamMembers, hasGps, teamId, o
             <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />GPS
           </span>
         )}
-        <NotificationBell teamId={teamId} onNewPoints={onNewPoints} />
       </div>
 
       {/* Right: Team avatar + menu */}

@@ -9,6 +9,7 @@ import { BroadcastBanner } from "@/components/BroadcastBanner";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { LocationGate } from "@/components/LocationGate";
 import { OSStatusBar } from "@/components/OSStatusBar";
+import { NotificationBell } from "@/components/NotificationBell";
 import { TeamAvatarRoom } from "@/components/TeamAvatarRoom";
 import { OtherTeamsView } from "@/components/OtherTeamsView";
 import { TeamLogoEditModal } from "@/components/TeamLogoEditModal";
@@ -260,8 +261,6 @@ export default function TeamDashboardPage() {
         teamSeed={teamSeed}
         teamMembers={teamMembers}
         hasGps={initialPos !== null}
-        teamId={teamId}
-        onNewPoints={handleNewPoints}
         onTeamNameEdit={() => { setNameInput(data?.team.name ?? ""); setShowNameEdit(true); }}
         onTeamAvatarEdit={() => setShowLogoEdit(true)}
       />
@@ -510,9 +509,9 @@ export default function TeamDashboardPage() {
       </PullToRefresh>
 
       {/* Dock */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pt-2 px-4"
+      <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-center pt-2 px-4"
         style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))", background: "linear-gradient(0deg, rgba(247,247,247,0.95) 60%, transparent)" }}>
-        <div className="inline-flex rounded-2xl p-1.5 gap-1 backdrop-blur-xl shadow-2xl" style={{ background: "rgba(255,255,255,0.9)", border: "1px solid rgba(0,0,0,0.06)" }}>
+        <div className="inline-flex rounded-2xl p-1.5 gap-1 backdrop-blur-xl shadow-2xl items-center" style={{ background: "rgba(255,255,255,0.9)", border: "1px solid rgba(0,0,0,0.06)" }}>
           {APPS.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
@@ -528,6 +527,8 @@ export default function TeamDashboardPage() {
               <span className="hidden sm:inline">{label}</span>
             </button>
           ))}
+          <div className="w-px h-6 mx-1" style={{ background: "rgba(0,0,0,0.06)" }} />
+          <NotificationBell teamId={teamId} onNewPoints={handleNewPoints} dropUp />
         </div>
       </div>
     </div>
