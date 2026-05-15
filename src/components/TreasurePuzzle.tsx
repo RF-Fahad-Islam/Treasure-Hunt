@@ -4,7 +4,7 @@ import confetti from "canvas-confetti";
 import { Reveal } from "./Reveal";
 import { Lock, Sparkles, Key } from "lucide-react";
 
-const CODE = "2026"; // The hunt year
+const CODE = "0849";
 
 export function TreasurePuzzle() {
   const [input, setInput] = useState("");
@@ -59,7 +59,7 @@ export function TreasurePuzzle() {
         
         <Reveal delay={0.1}>
           <h2 className="font-display text-[clamp(2rem,7vw,3.5rem)] font-black leading-tight tracking-tight text-[#2B2B2B] dark:text-white mb-6">
-            Crack the code. <br />
+            Solve the riddle. <br />
             <span className="text-[#FFC800]">Claim the glory.</span>
           </h2>
         </Reveal>
@@ -67,7 +67,7 @@ export function TreasurePuzzle() {
         <Reveal delay={0.2}>
           <div className="max-w-xl mx-auto mb-12">
             <p className="text-[17px] font-semibold text-[#777] dark:text-white/60 mb-6">
-              A hidden treasure awaits the sharpest minds. Solve this snippet to find the 4-digit key:
+              A hidden treasure awaits the sharpest minds. Solve this to find the 4-digit key:
             </p>
             <div className="bg-[#1E1E1E] rounded-2xl p-6 text-left font-mono text-sm shadow-xl border border-white/10 relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-40 transition-opacity">
@@ -78,9 +78,11 @@ export function TreasurePuzzle() {
                 <div className="w-3 h-3 rounded-full bg-[#FFBD2E]" />
                 <div className="w-3 h-3 rounded-full bg-[#27C93F]" />
               </div>
-              <code className="block space-y-1 text-white/90">
-                <p><span className="text-[#C586C0]">const</span> <span className="text-[#9CDCFE]">solve</span> = (n) =&gt; n * <span className="text-[#B5CEA8]">2</span> + <span className="text-[#B5CEA8]">1000</span>;</p>
-                <p><span className="text-[#DCDCAA]">console</span>.<span className="text-[#DCDCAA]">log</span>(<span className="text-[#9CDCFE]">solve</span>(<span className="text-[#B5CEA8]">513</span>)); <span className="text-[#6A9955]"> // ?</span></p>
+              <code className="block space-y-2 text-white/90">
+                <p><span className="text-[#6A9955] italic">// Riddle:</span></p>
+                <p className="text-[#CE9178]">"I have keys but no locks."</p>
+                <p className="text-[#CE9178]">"I have space but no room."</p>
+                <p className="text-[#CE9178]">"You can enter, but never go inside."</p>
               </code>
             </div>
           </div>
