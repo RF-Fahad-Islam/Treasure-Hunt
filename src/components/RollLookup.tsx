@@ -1,7 +1,7 @@
 import { useState, type FormEvent, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuthStore } from "@/store/authStore";
-import { lookupByRoll, loginByRoll } from "@/services/auth";
+import { lookupByRoll, loginByRoll, loginFromRegistration, lookupRegistrationByRoll } from "@/services/auth";
 import { insforge } from "@/lib/insforge";
 import { sendWelcomeEmail } from "@/lib/email";
 
@@ -11,7 +11,7 @@ interface Props {
   initialStep?: Step;
 }
 
-type Step = "roll" | "team-info" | "code" | "loading" | "error" | "register" | "register-success";
+type Step = "roll" | "team-info" | "code" | "loading" | "error" | "register" | "verify";
 
 export function RollLookup({ open, onClose, initialStep = "roll" }: Props) {
   const setSession = useAuthStore((s) => s.setSession);
@@ -26,6 +26,8 @@ export function RollLookup({ open, onClose, initialStep = "roll" }: Props) {
   }, [open, initialStep]);
   const [teamCode, setTeamCode] = useState("");
   const [teamInfo, setTeamInfo] = useState<Awaited<ReturnType<typeof lookupByRoll>> | null>(null);
+  const [regInfo, setRegInfo] = useState<{ id: string; name: string; roll: string; email: string; approved: boolean; avatar_emoji: string | null } | null>(null);
+  const [emailConfirm, setEmailConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   function reset() {
@@ -33,6 +35,8 @@ export function RollLookup({ open, onClose, initialStep = "roll" }: Props) {
     setRoll("");
     setTeamCode("");
     setTeamInfo(null);
+    setRegInfo(null);
+    setEmailConfirm("");
     setError(null);
   }
 
@@ -46,10 +50,22 @@ export function RollLookup({ open, onClose, initialStep = "roll" }: Props) {
     if (!roll.trim()) return;
     setError(null);
     setStep("loading");
+    // First check if they're an existing participant with a team
     try {
       const info = await lookupByRoll(roll.trim());
-      setTeamInfo(info);
-      setStep("team-info");
+      if (info.team) {
+        setTeamInfo(info);
+        setStep("team-info");
+        return;
+      }
+    } catch { /* not a participant yet — fall through */ }
+
+    // Check registrations
+    try {
+      const reg = await lookupRegistrationByRoll(roll.trim());
+      setRegInfo(reg);
+      setEmailConfirm("");
+      setStep("verify");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Lookup failed");
       setStep("error");
@@ -68,6 +84,20 @@ export function RollLookup({ open, onClose, initialStep = "roll" }: Props) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
       setStep("code");
+    }
+  }
+
+  async function handleEnterLobby() {
+    if (!regInfo) return;
+    setError(null);
+    setStep("loading");
+    try {
+      const session = await loginFromRegistration(regInfo.id);
+      setSession(session);
+      handleClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to enter lobby");
+      setStep("verify");
     }
   }
 
@@ -151,7 +181,7 @@ export function RollLookup({ open, onClose, initialStep = "roll" }: Props) {
                 </motion.div>
               )}
 
-              {step === "team-info" && teamInfo && (
+              {step === "team-info" && teamInfo && teamInfo.team && (
                 <TeamInfo
                   key="info"
                   teamInfo={teamInfo}
@@ -164,7 +194,7 @@ export function RollLookup({ open, onClose, initialStep = "roll" }: Props) {
                 />
               )}
 
-              {step === "code" && teamInfo && (
+              {step === "code" && teamInfo && teamInfo.team && (
                 <CodeEntry
                   key="code"
                   teamInfo={teamInfo}
@@ -176,36 +206,24 @@ export function RollLookup({ open, onClose, initialStep = "roll" }: Props) {
                 />
               )}
 
+              {step === "verify" && regInfo && (
+                <VerifyEmail
+                  key="verify"
+                  regInfo={regInfo}
+                  emailConfirm={emailConfirm}
+                  setEmailConfirm={setEmailConfirm}
+                  error={error}
+                  onEnterLobby={handleEnterLobby}
+                  onBack={() => { setStep("roll"); setError(null); }}
+                />
+              )}
+
               {step === "register" && (
                 <RegisterForm
                   key="register"
                   onBack={() => setStep("roll")}
-                  onSuccess={() => setStep("register-success")}
+                  onClose={handleClose}
                 />
-              )}
-
-              {step === "register-success" && (
-                <motion.div
-                  key="register-success"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="flex flex-col gap-5 items-center text-center py-6"
-                >
-                  <p className="text-5xl">🎉</p>
-                  <h2 className="font-display text-[24px] font-extrabold" style={{ color: "var(--fg)" }}>
-                    Registration Submitted!
-                  </h2>
-                  <p className="text-[15px] font-semibold leading-relaxed" style={{ color: "var(--fg-muted)" }}>
-                    Your details have been recorded. <strong style={{ color: "var(--fg)" }}>All the teams will be assigned by your seniors</strong> closer to the event.
-                  </p>
-                  <button
-                    onClick={handleClose}
-                    className="btn-press ripple btn-primary w-full mt-4"
-                  >
-                    Got it!
-                  </button>
-                </motion.div>
               )}
             </AnimatePresence>
           </motion.div>
@@ -246,7 +264,7 @@ function RollForm({
           Find your team
         </h2>
         <p className="mt-1 text-[14px] font-semibold" style={{ color: "var(--fg-muted)" }}>
-          Enter your student roll to look up your team.
+          Enter your student roll to look up your registration.
         </p>
       </div>
 
@@ -282,9 +300,9 @@ function RollForm({
         >
           <ul className="flex flex-col gap-2 text-[13px] font-semibold leading-relaxed" style={{ color: "var(--fg-muted)" }}>
             <li>🔑 <strong style={{ color: "var(--fg)" }}>Roll number</strong> was provided during registration.</li>
-            <li>👥 Once found, you&apos;ll see your <strong style={{ color: "var(--fg)" }}>team name</strong> and <strong style={{ color: "var(--fg)" }}>squad members</strong>.</li>
-            <li>🔐 Enter the <strong style={{ color: "var(--fg)" }}>team code</strong> shared by your team leader to log in.</li>
-            <li>❓ If you don&apos;t know your roll or team, ask your <strong style={{ color: "var(--fg)" }}>event coordinator</strong>.</li>
+            <li>👥 Once found, you&apos;ll be able to <strong style={{ color: "var(--fg)" }}>enter the lobby</strong> to see other participants.</li>
+            <li>🔐 If already in a team, you&apos;ll need the <strong style={{ color: "var(--fg)" }}>team code</strong> to log in.</li>
+            <li>❓ If you don&apos;t know your roll, ask your <strong style={{ color: "var(--fg)" }}>event coordinator</strong>.</li>
           </ul>
         </motion.div>
       )}
@@ -306,6 +324,95 @@ function RollForm({
         </button>
       </div>
     </motion.form>
+  );
+}
+
+/* ── Verify email step ──────────────────────────────────────── */
+
+function VerifyEmail({
+  regInfo,
+  emailConfirm,
+  setEmailConfirm,
+  error,
+  onEnterLobby,
+  onBack,
+}: {
+  regInfo: { id: string; name: string; roll: string; email: string; approved: boolean; avatar_emoji: string | null };
+  emailConfirm: string;
+  setEmailConfirm: (v: string) => void;
+  error: string | null;
+  onEnterLobby: () => void;
+  onBack: () => void;
+}) {
+  const emailMatch = emailConfirm.toLowerCase() === regInfo.email.toLowerCase();
+  return (
+    <motion.div
+      key="verify"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.35 }}
+      className="flex flex-col gap-5"
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-extrabold uppercase tracking-[0.22em]" style={{ color: "var(--fg-muted)" }}>
+          Roll {regInfo.roll}
+        </span>
+        <button onClick={onBack} className="text-[12px] font-bold underline underline-offset-4" style={{ color: "var(--fg-muted)" }}>
+          Different roll
+        </button>
+      </div>
+
+      <div className="text-center">
+        <p className="text-4xl mb-2">👋</p>
+        <h2 className="font-display text-[24px] font-extrabold" style={{ color: "var(--fg)" }}>
+          Welcome, {regInfo.name}!
+        </h2>
+        <p className="mt-1 text-[14px] font-semibold" style={{ color: "var(--fg-muted)" }}>
+          Confirm your email to enter the participant lobby.
+        </p>
+      </div>
+
+      <div>
+        <label className="text-[11px] font-extrabold uppercase tracking-[0.22em]" style={{ color: "var(--fg-muted)" }}>
+          Your registered email
+        </label>
+        <input
+          type="email"
+          placeholder={regInfo.email.slice(0, 3) + "***@***"}
+          value={emailConfirm}
+          onChange={(e) => setEmailConfirm(e.target.value)}
+          autoFocus
+          className="mt-1 w-full rounded-2xl border-2 px-4 py-3 text-[16px] font-extrabold outline-none transition-all"
+          style={{ borderColor: emailMatch ? "var(--color-brand-green)" : "var(--border-soft)", background: "var(--surface)", color: "var(--fg)" }}
+        />
+        {emailConfirm && !emailMatch && (
+          <p className="mt-1 text-[12px] font-semibold" style={{ color: "var(--color-brand-red)" }}>
+            Email doesn't match our records.
+          </p>
+        )}
+      </div>
+
+      {error && (
+        <p className="text-[13px] font-bold text-center" style={{ color: "var(--color-brand-red)" }}>
+          {error}
+        </p>
+      )}
+
+      <button
+        data-sound="success"
+        onClick={onEnterLobby}
+        disabled={!emailMatch}
+        className="btn-press ripple btn-primary w-full disabled:opacity-50"
+      >
+        <span>Enter Lobby</span>
+        <Arrow />
+      </button>
+
+      <button onClick={onBack} className="w-full text-[13px] font-bold underline underline-offset-4" style={{ color: "var(--fg-muted)" }}>
+        ← Different roll
+      </button>
+    </motion.div>
   );
 }
 
@@ -353,7 +460,7 @@ function TeamInfo({
           Your team
         </p>
         <p className="mt-1 font-display text-[28px] font-extrabold tracking-tight gradient-text">
-          {team.name}
+          {team!.name}
         </p>
       </div>
 
@@ -457,7 +564,7 @@ function CodeEntry({
           Enter Team Code
         </h2>
         <p className="mt-1 text-[14px] font-semibold" style={{ color: "var(--fg-muted)" }}>
-          For <strong style={{ color: "var(--fg)" }}>{teamInfo.team.name}</strong>
+          For <strong style={{ color: "var(--fg)" }}>{teamInfo.team!.name}</strong>
         </p>
       </div>
 
@@ -505,20 +612,21 @@ function Arrow() {
   );
 }
 
-/* ── Step 4: Registration ─────────────────────────────────────── */
+/* ── Step 4: Registration (no auto-login) ──────────────────── */
 
 function RegisterForm({
   onBack,
-  onSuccess,
+  onClose,
 }: {
   onBack: () => void;
-  onSuccess: () => void;
+  onClose: () => void;
 }) {
   const [name, setName] = useState("");
   const [roll, setRoll] = useState("");
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -527,25 +635,53 @@ function RegisterForm({
     setError(null);
 
     try {
-      const { error: dbError } = await insforge.database
+      const { error: regError } = await insforge.database
         .from("registrations")
         .insert({ name: name.trim(), roll: roll.trim(), email: email.trim() });
 
-      if (dbError) {
-        if (dbError.code === "23505") {
+      if (regError) {
+        if (regError.code === "23505") {
           throw new Error("This roll number is already registered.");
         }
-        throw dbError;
+        throw regError;
       }
 
       const emailErr = await sendWelcomeEmail(name.trim(), email.trim(), roll.trim());
       if (emailErr) console.error("Welcome email failed:", emailErr);
 
-      onSuccess();
+      setSuccess(true);
     } catch (err: any) {
       setError(err.message || "Failed to submit registration.");
       setSubmitting(false);
     }
+  }
+
+  if (success) {
+    return (
+      <motion.div
+        key="success"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.35 }}
+        className="flex flex-col gap-5 py-4 text-center"
+      >
+        <p className="text-5xl mb-2">✅</p>
+        <h2 className="font-display text-[24px] font-extrabold" style={{ color: "var(--fg)" }}>
+          Registration Submitted!
+        </h2>
+        <p className="text-[14px] font-semibold leading-relaxed" style={{ color: "var(--fg-muted)" }}>
+          Your registration has been received. Use the <strong style={{ color: "var(--fg)" }}>"Find your team"</strong> option
+          above with your roll number and email to enter the participant lobby.
+        </p>
+        <button
+          onClick={onClose}
+          className="btn-press ripple btn-primary w-full mt-4"
+        >
+          Got it!
+        </button>
+      </motion.div>
+    );
   }
 
   return (

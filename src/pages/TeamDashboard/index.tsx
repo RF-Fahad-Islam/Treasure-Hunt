@@ -10,6 +10,7 @@ import { PullToRefresh } from "@/components/PullToRefresh";
 import { LocationGate } from "@/components/LocationGate";
 import { OSStatusBar } from "@/components/OSStatusBar";
 import { NotificationBell } from "@/components/NotificationBell";
+import { ParticipantLobby } from "@/components/ParticipantLobby";
 import { TeamAvatarRoom } from "@/components/TeamAvatarRoom";
 import { OtherTeamsView } from "@/components/OtherTeamsView";
 import { TeamLogoEditModal } from "@/components/TeamLogoEditModal";
@@ -189,12 +190,22 @@ export default function TeamDashboardPage() {
 
   const myMapLocation = initialPos ? { lat: initialPos.lat, lng: initialPos.lng } : null;
 
-  if (!teamId) {
+  if (!session) {
     return (
       <div className="relative min-h-screen overflow-hidden" style={{ background: "#F7F7F7" }}>
         <div className="flex min-h-screen flex-col items-center justify-center p-8">
           <p className="text-5xl">🔐</p>
           <p className="mt-4 font-display text-2xl font-extrabold" style={{ color: "#777777" }}>Not logged in</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (session.role === "team" && !teamId) {
+    return (
+      <div className="relative min-h-screen overflow-hidden" style={{ background: "#F7F7F7", paddingBottom: "calc(3rem + env(safe-area-inset-bottom, 0px))" }}>
+        <div className="mx-auto max-w-2xl px-4 pt-24">
+          <ParticipantLobby />
         </div>
       </div>
     );
@@ -465,7 +476,7 @@ export default function TeamDashboardPage() {
                     {/* Other Teams (leader only) */}
                     {isLeader && (
                       <Reveal delay={0.18} duration={0.5}>
-                        <OtherTeamsView teams={allTeamsLobby} excludeTeamId={teamId} />
+                        <OtherTeamsView teams={allTeamsLobby} excludeTeamId={teamId!} />
                       </Reveal>
                     )}
 
@@ -528,7 +539,7 @@ export default function TeamDashboardPage() {
             </button>
           ))}
           <div className="w-px h-6 mx-1" style={{ background: "rgba(0,0,0,0.06)" }} />
-          <NotificationBell teamId={teamId} onNewPoints={handleNewPoints} dropUp />
+          <NotificationBell teamId={teamId!} onNewPoints={handleNewPoints} dropUp />
         </div>
       </div>
     </div>

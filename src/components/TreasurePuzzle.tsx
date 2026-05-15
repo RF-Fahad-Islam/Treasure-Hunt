@@ -2,14 +2,19 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import confetti from "canvas-confetti";
 import { Reveal } from "./Reveal";
-import { Lock, Sparkles, Key } from "lucide-react";
+import { Lock, Sparkles, Key, Trophy } from "lucide-react";
+import { GlobalRiddleLeaderboard } from "./GlobalRiddleLeaderboard";
+import { insforge } from "@/lib/insforge";
 
-const CODE = "2026"; // The hunt year
+const CODE = "0849";
 
 export function TreasurePuzzle() {
   const [input, setInput] = useState("");
   const [isOpened, setIsOpened] = useState(false);
   const [isError, setIsError] = useState(false);
+  const [solverName, setSolverName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   const handleKeypad = (val: string) => {
     if (isOpened) return;
@@ -44,53 +49,70 @@ export function TreasurePuzzle() {
     }, 600);
   };
 
+  const handleClaimSpot = async () => {
+    if (!solverName.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      await insforge.database.from("mini_game_scores").insert([{ nickname: solverName.trim(), score: 0 }]);
+      setSubmitted(true);
+    } catch { /* silent */ }
+    setSubmitting(false);
+  };
+
   return (
     <section className="relative py-24 px-5 sm:px-8 overflow-hidden bg-[#F7F7F7] dark:bg-[#0A0A0A]">
       {/* Background decorations */}
       <div className="absolute top-0 left-0 w-full h-full opacity-[0.03] pointer-events-none" 
            style={{ backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
       
-      <div className="max-w-4xl mx-auto text-center relative z-10">
-        <Reveal>
-          <span className="inline-block px-3 py-1 rounded-full bg-[#FFC800]/10 border border-[#FFC800]/20 text-[11px] font-black uppercase tracking-[0.2em] text-[#7A5A00] dark:text-[#FFC800] mb-6">
-            The Secret Vault
-          </span>
-        </Reveal>
-        
-        <Reveal delay={0.1}>
-          <h2 className="font-display text-[clamp(2rem,7vw,3.5rem)] font-black leading-tight tracking-tight text-[#2B2B2B] dark:text-white mb-6">
-            Crack the code. <br />
-            <span className="text-[#FFC800]">Claim the glory.</span>
-          </h2>
-        </Reveal>
+      <div className="max-w-6xl mx-auto relative z-10">
+        <div className="text-center mb-10">
+          <Reveal>
+            <span className="inline-block px-3 py-1 rounded-full bg-[#FFC800]/10 border border-[#FFC800]/20 text-[11px] font-black uppercase tracking-[0.2em] text-[#7A5A00] dark:text-[#FFC800] mb-6">
+              The Secret Vault
+            </span>
+          </Reveal>
+          
+          <Reveal delay={0.1}>
+            <h2 className="font-display text-[clamp(2rem,7vw,3.5rem)] font-black leading-tight tracking-tight text-[#2B2B2B] dark:text-white mb-6">
+              Solve the riddle. <br />
+              <span className="text-[#FFC800]">Claim the glory.</span>
+            </h2>
+          </Reveal>
+        </div>
 
-        <Reveal delay={0.2}>
-          <div className="max-w-xl mx-auto mb-12">
-            <p className="text-[17px] font-semibold text-[#777] dark:text-white/60 mb-6">
-              A hidden treasure awaits the sharpest minds. Solve this snippet to find the 4-digit key:
-            </p>
-            <div className="bg-[#1E1E1E] rounded-2xl p-6 text-left font-mono text-sm shadow-xl border border-white/10 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-40 transition-opacity">
-                <Key size={24} className="text-[#FFC800]" />
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 sm:gap-8">
+          {/* Puzzle content */}
+          <div className="lg:col-span-3 flex flex-col items-center">
+            <Reveal delay={0.2}>
+              <div className="max-w-xl w-full mb-8">
+                <p className="text-[17px] font-semibold text-[#777] dark:text-white/60 mb-6 text-center">
+                  A hidden treasure awaits the sharpest minds. Solve this to find the 4-digit key:
+                </p>
+                <div className="bg-[#1E1E1E] rounded-2xl p-6 text-left font-mono text-sm shadow-xl border border-white/10 relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-40 transition-opacity">
+                    <Key size={24} className="text-[#FFC800]" />
+                  </div>
+                  <div className="flex gap-2 mb-4">
+                    <div className="w-3 h-3 rounded-full bg-[#FF5F56]" />
+                    <div className="w-3 h-3 rounded-full bg-[#FFBD2E]" />
+                    <div className="w-3 h-3 rounded-full bg-[#27C93F]" />
+                  </div>
+                  <code className="block space-y-2 text-white/90">
+                    <p><span className="text-[#6A9955] italic">// Riddle:</span></p>
+                    <p className="text-[#CE9178]">"I have keys but no locks."</p>
+                    <p className="text-[#CE9178]">"I have space but no room."</p>
+                    <p className="text-[#CE9178]">"You can enter, but never go inside."</p>
+                  </code>
+                </div>
               </div>
-              <div className="flex gap-2 mb-4">
-                <div className="w-3 h-3 rounded-full bg-[#FF5F56]" />
-                <div className="w-3 h-3 rounded-full bg-[#FFBD2E]" />
-                <div className="w-3 h-3 rounded-full bg-[#27C93F]" />
-              </div>
-              <code className="block space-y-1 text-white/90">
-                <p><span className="text-[#C586C0]">const</span> <span className="text-[#9CDCFE]">solve</span> = (n) =&gt; n * <span className="text-[#B5CEA8]">2</span> + <span className="text-[#B5CEA8]">1000</span>;</p>
-                <p><span className="text-[#DCDCAA]">console</span>.<span className="text-[#DCDCAA]">log</span>(<span className="text-[#9CDCFE]">solve</span>(<span className="text-[#B5CEA8]">513</span>)); <span className="text-[#6A9955]"> // ?</span></p>
-              </code>
-            </div>
-          </div>
-        </Reveal>
+            </Reveal>
 
-        <div className="flex flex-col items-center justify-center gap-12 lg:flex-row lg:items-start lg:gap-20">
-          {/* Treasure Box Visual */}
-          <div className="relative">
-            <AnimatePresence mode="wait">
-              {!isOpened ? (
+            <div className="flex flex-col items-center justify-center gap-12 lg:flex-row lg:items-start lg:gap-20">
+              {/* Treasure Box Visual */}
+              <div className="relative">
+                <AnimatePresence mode="wait">
+                  {!isOpened ? (
                 <motion.div
                   key="closed"
                   initial={{ scale: 0.8, opacity: 0 }}
@@ -145,7 +167,7 @@ export function TreasurePuzzle() {
             </AnimatePresence>
           </div>
 
-          {/* Keypad UI */}
+          {/* Keypad UI + Name claim */}
           <div className="w-full max-w-[280px]">
             <div className="mb-6 flex justify-center gap-3">
               {[...Array(4)].map((_, i) => (
@@ -171,17 +193,71 @@ export function TreasurePuzzle() {
                     else if (btn === "⌫") setInput(input.slice(0, -1));
                     else handleKeypad(btn.toString());
                   }}
-                  className="btn-press ripple h-14 rounded-2xl bg-white dark:bg-white/[0.05] border-2 border-black/5 dark:border-white/10 flex items-center justify-center font-black text-lg text-[#2B2B2B] dark:text-white hover:border-[#FFC800]/50 transition-colors"
+                  disabled={isOpened}
+                  className="btn-press ripple h-14 rounded-2xl bg-white dark:bg-white/[0.05] border-2 border-black/5 dark:border-white/10 flex items-center justify-center font-black text-lg text-[#2B2B2B] dark:text-white hover:border-[#FFC800]/50 transition-colors disabled:opacity-30"
                   style={{ borderBottomWidth: "6px" }}
                 >
                   {btn}
                 </button>
               ))}
             </div>
-            
-            <p className="mt-6 text-[12px] font-bold text-[#999] uppercase tracking-widest flex items-center justify-center gap-2">
-              <Key size={14} /> Enter 4-digit code
-            </p>
+
+            {/* Claim spot form */}
+            <AnimatePresence>
+              {isOpened && !submitted && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="mt-6 p-4 rounded-2xl text-center"
+                  style={{ background: "rgba(88,204,2,0.06)", border: "1px solid rgba(88,204,2,0.2)" }}
+                >
+                  <Trophy size={20} className="mx-auto mb-2 text-[#FFC800]" />
+                  <p className="text-[12px] font-extrabold mb-3" style={{ color: "#2B2B2B" }}>
+                    Secure your name on the Riddle Board!
+                  </p>
+                  <input
+                    type="text"
+                    placeholder="Your name"
+                    value={solverName}
+                    onChange={(e) => setSolverName(e.target.value)}
+                    maxLength={20}
+                    className="w-full px-3 py-2.5 rounded-xl text-center text-[14px] font-bold outline-none mb-3"
+                    style={{ background: "#F0F0F0", color: "#2B2B2B" }}
+                  />
+                  <button
+                    onClick={handleClaimSpot}
+                    disabled={!solverName.trim() || submitting}
+                    className="w-full py-2.5 rounded-xl text-[13px] font-black text-white disabled:opacity-50 transition-all"
+                    style={{ background: "#58CC02", boxShadow: "0 4px 0 0 #3A8400" }}
+                  >
+                    {submitting ? "..." : "Claim Spot 🏆"}
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {submitted && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="mt-6 p-4 rounded-2xl text-center"
+                style={{ background: "rgba(88,204,2,0.08)", border: "1px solid rgba(88,204,2,0.25)" }}
+              >
+                <p className="text-2xl mb-1">✅</p>
+                <p className="text-[14px] font-black" style={{ color: "#58CC02" }}>Claimed!</p>
+                <p className="text-[11px] font-semibold mt-1" style={{ color: "#777" }}>
+                  {solverName} is on the board
+                </p>
+              </motion.div>
+            )}
+          </div>
+        </div>
+          </div>
+
+          {/* Leaderboard panel */}
+          <div className="lg:col-span-1">
+            <GlobalRiddleLeaderboard />
           </div>
         </div>
       </div>

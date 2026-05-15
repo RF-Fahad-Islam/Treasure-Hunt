@@ -168,14 +168,28 @@ export async function fetchTeamMembers(teamId: string): Promise<Participant[]> {
 
 /* ─── Update own avatar ─────────────────────────────────────── */
 
-export async function updateMyAvatar(
+export async function updateMyAvatarSeed(
   participantId: string,
-  avatar: { avatar_emoji: string; avatar_color: string }
+  seed: string
 ): Promise<void> {
   const { error } = await insforge.database
     .from("participants")
-    .update(avatar)
+    .update({ avatar_emoji: seed })
     .eq("id", participantId);
+
+  if (error) throw new Error(error.message);
+}
+
+/* ─── Update registration avatar seed ────────────────────────── */
+
+export async function updateRegistrationAvatarSeed(
+  roll: string,
+  seed: string
+): Promise<void> {
+  const { error } = await insforge.database
+    .from("registrations")
+    .update({ avatar_emoji: seed })
+    .eq("roll", roll);
 
   if (error) throw new Error(error.message);
 }

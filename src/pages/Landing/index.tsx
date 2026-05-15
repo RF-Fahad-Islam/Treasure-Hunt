@@ -11,6 +11,7 @@ import { Backdrop } from "@/components/Backdrop";
 import { MiniGame } from "@/components/MiniGame";
 import { TreasurePuzzle } from "@/components/TreasurePuzzle";
 
+
 /**
  * Landing page — the original App.tsx content, moved here unchanged.
  * Route: /
@@ -29,7 +30,9 @@ export default function LandingPage() {
         <LiveLeaderboard />
         <CountdownTimer />
         <MiniGame />
+
         <BottomCTA />
+
       </main>
       <Footer />
     </div>

@@ -11,6 +11,7 @@ interface AuthState {
   error: string | null;
 
   setSession: (session: AppSession) => void;
+  updateAvatarSeed: (seed: string) => void;
   clearSession: () => Promise<void>;
   setLoading: (v: boolean) => void;
   setError: (msg: string | null) => void;
@@ -27,6 +28,12 @@ export const useAuthStore = create<AuthState>()(
       error: null,
 
       setSession: (session) => set({ session, error: null }),
+      updateAvatarSeed: (seed) => {
+        const s = get().session;
+        if (s && s.role === "team") {
+          set({ session: { ...s, avatarSeed: seed } });
+        }
+      },
       clearSession: async () => {
         const { session } = get();
         if (session && "sessionToken" in session) {
