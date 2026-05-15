@@ -72,7 +72,7 @@ export function TeamAvatarRoom({ members, teamSeed, teamName, currentUserId }: P
                     borderColor: p.is_leader ? "#FFC800" : "rgba(0,0,0,0.08)",
                     boxShadow: p.is_leader ? "0 0 16px rgba(255,200,0,0.25)" : "0 2px 8px rgba(0,0,0,0.06)",
                   }}>
-                  <img src={getAvatarUrl(p.name || p.roll || p.id, 96)} alt={p.name}
+                  <img src={getAvatarUrl(p.avatar_emoji || p.name || p.roll || p.id, 96)} alt={p.name}
                     className="w-full h-full object-cover" />
                 </div>
                 {p.is_leader && (

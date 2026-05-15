@@ -5,6 +5,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { RollLookup } from "./RollLookup";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useSession, useAuthStore } from "@/store/authStore";
+import { getAvatarUrl } from "@/lib/avatar";
 
 const ROLE_LABEL: Record<string, string> = {
   team: "🏃 Team",
@@ -116,12 +117,19 @@ export function Nav() {
                     className="flex items-center gap-2 rounded-full px-3 py-1.5 text-[13px] font-extrabold transition-all"
                     style={{ background: "var(--surface)", color: "var(--fg)" }}
                   >
-                    <span
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-extrabold text-white"
-                      style={{ background: "var(--color-brand-green)" }}
-                    >
-                      {initials}
-                    </span>
+                    {session.role === "team" && (session as any).avatarSeed ? (
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full overflow-hidden border-2 border-white/20"
+                        style={{ background: "#F0F0F0" }}>
+                        <img src={getAvatarUrl((session as any).avatarSeed, 32)} alt="" className="w-full h-full object-cover" />
+                      </span>
+                    ) : (
+                      <span
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-extrabold text-white"
+                        style={{ background: "var(--color-brand-green)" }}
+                      >
+                        {initials}
+                      </span>
+                    )}
                   </button>
 
                   {showMenu && (

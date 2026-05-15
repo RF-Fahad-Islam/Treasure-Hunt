@@ -17,7 +17,7 @@ const steps: Step[] = [
   {
     n: "01",
     title: "Enter your roll",
-    body: "Punch in your student roll to load your team.",
+    body: "Punch in your student roll to load your team and join the live lobby.",
     accent: {
       badgeBg: "bg-[#E8FFD1]",
       badgeFg: "text-[#3A8400]",
@@ -27,7 +27,7 @@ const steps: Step[] = [
   {
     n: "02",
     title: "Crack the clue",
-    body: "Each clue points to a spot. Solve it. Move.",
+    body: "Solve each clue within 40 minutes for +100 points. If you're stuck, you can reveal the spot but lose the bonus.",
     accent: {
       badgeBg: "bg-[#DCF1FE]",
       badgeFg: "text-[#0E6E9C]",
@@ -36,8 +36,8 @@ const steps: Step[] = [
   },
   {
     n: "03",
-    title: "Arrive at the spot to advance",
-    body: "Find the location and report to the senior.",
+    title: "Arrive as a team",
+    body: "Find the spot and report to the host with all members present to stop the travel timer.",
     accent: {
       badgeBg: "bg-[#FFF1B8]",
       badgeFg: "text-[#7A5A00]",
@@ -46,8 +46,8 @@ const steps: Step[] = [
   },
   {
     n: "04",
-    title: "Beat the timer",
-    body: "Fastest team across all clues wins. Every second on the clock counts.",
+    title: "Accumulate points",
+    body: "Fastest teams score high, but total points and time penalties decide the ultimate winner.",
     accent: {
       badgeBg: "bg-[#FFE4E4]",
       badgeFg: "text-[#C03030]",
@@ -56,8 +56,8 @@ const steps: Step[] = [
   },
   {
     n: "05",
-    title: "Take on the mini-games",
-    body: "Crack mini-games at every spot to earn more points and get ahead.",
+    title: "Checkpoint Activities",
+    body: "Participate in activities at each spot to earn up to 100 extra points based on performance.",
     optional: true,
     accent: {
       badgeBg: "bg-[#F2EBFF]",

@@ -107,6 +107,7 @@ export interface Registration {
   roll: string;
   email: string;
   approved: boolean;
+  avatar_emoji: string | null;
   created_at: string | null;
 }
 
@@ -135,11 +136,14 @@ export type AppSession =
 
 export interface TeamSession {
   role: "team";
-  teamId: string;
+  teamId: string | null;
   teamName: string;
   teamCode: string;
   participantName: string;
+  participantRoll: string;
   participantId: string;
+  isLeader: boolean;
+  avatarSeed: string | null;
   sessionToken: string;
 }
 
