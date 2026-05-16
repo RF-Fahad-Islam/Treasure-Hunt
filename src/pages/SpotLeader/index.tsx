@@ -53,9 +53,9 @@ export default function SpotLeaderPage() {
 
   useEffect(() => { void load(); }, [load]);
 
-  // Tick every 10s for live countdown displays
+  // Tick every 1min to refresh timer displays
   useEffect(() => {
-    tickRef.current = setInterval(() => setTick((t) => t + 1), 10000);
+    tickRef.current = setInterval(() => setTick((t) => t + 1), 60000);
     return () => { if (tickRef.current) clearInterval(tickRef.current); };
   }, []);
 
@@ -90,6 +90,31 @@ export default function SpotLeaderPage() {
     const elapsed = Date.now() - new Date(team.arrivalApprovedAt).getTime();
     if (elapsed >= MIN_WAIT_MS) return 0;
     return Math.ceil((MIN_WAIT_MS - elapsed) / 60000);
+  };
+
+  const formatElapsed = (startedAt: string | null) => {
+    if (!startedAt) return "—";
+    const ms = Date.now() - new Date(startedAt).getTime();
+    const totalSec = Math.floor(ms / 1000);
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return `${min}m ${sec.toString().padStart(2, "0")}s`;
+  };
+
+  const getTimeStatus = (team: ArrivingTeam, timeLimit: number) => {
+    if (!team.clueStartedAt) return null;
+    const elapsedMin = (Date.now() - new Date(team.clueStartedAt).getTime()) / 60000;
+    if (elapsedMin < timeLimit) return null;
+
+    if (team.helpActivatedAt) return "revealed";
+    if (team.timeoutAcknowledgedAt) return "continued";
+    return "overdue";
+  };
+
+  const getMiniGameStatus = (team: ArrivingTeam) => {
+    if (team.miniGamePlayed) return null;
+    if (team.miniGameStarted) return "inProgress";
+    return null;
   };
 
   const handleApproveArrival = async (team: ArrivingTeam) => {
@@ -508,9 +533,35 @@ export default function SpotLeaderPage() {
                             : team.clueText}
                         </p>
 
-                        <p className="mt-3 flex items-center gap-2 text-[12px] sm:text-[13px] font-extrabold" style={{ color: "var(--fg-muted)" }}>
-                          ⏱ Hunting for {team.timeElapsedMinutes}m
-                        </p>
+                        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span className="text-[12px] sm:text-[13px] font-extrabold" style={{ color: "var(--fg-muted)" }}>
+                            ⏱ {formatElapsed(team.clueStartedAt)} / {data?.clueTimeLimitMinutes ?? 40}m
+                          </span>
+                          {getTimeStatus(team, data?.clueTimeLimitMinutes ?? 40) === "revealed" && (
+                            <span className="rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide"
+                              style={{ background: "rgba(255,75,75,0.12)", color: "#FF4B4B" }}>
+                              😤 Timed out · 💡 Revealed
+                            </span>
+                          )}
+                          {getTimeStatus(team, data?.clueTimeLimitMinutes ?? 40) === "continued" && (
+                            <span className="rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide"
+                              style={{ background: "rgba(255,200,0,0.12)", color: "#E5A800" }}>
+                              😤 Timed out · 🔍 Continued
+                            </span>
+                          )}
+                          {getTimeStatus(team, data?.clueTimeLimitMinutes ?? 40) === "overdue" && (
+                            <span className="rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide"
+                              style={{ background: "rgba(255,75,75,0.08)", color: "#FF4B4B" }}>
+                              ⏰ Overdue
+                            </span>
+                          )}
+                          {getMiniGameStatus(team) === "inProgress" && (
+                            <span className="rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide"
+                              style={{ background: "rgba(88,204,2,0.12)", color: "#58CC02" }}>
+                              🎮 In Mini-Game
+                            </span>
+                          )}
+                        </div>
 
                         {team.fullRoute && team.fullRoute.length > 0 && (
                           <div className="mt-6 pt-6 border-t-[3px] border-dashed" style={{ borderColor: "var(--border-soft)" }}>

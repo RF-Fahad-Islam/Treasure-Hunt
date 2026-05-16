@@ -18,8 +18,8 @@ export function OSStatusBar({ teamName, teamSeed, teamMembers, hasGps = false, o
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const clearSession = useAuthStore((s) => s.clearSession);
-  const me = teamMembers.find((p) => p.id === (useAuthStore.getState().session?.role === "team" ? (useAuthStore.getState().session as any)?.participantId : null));
-  const isLeader = me?.is_leader === true;
+  const session = useAuthStore((s) => s.session);
+  const isLeader = session?.role === "team" && session.isLeader;
 
   useEffect(() => {
     const interval = setInterval(() => setTime(new Date()), 1000);
