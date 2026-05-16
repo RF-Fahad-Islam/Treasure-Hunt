@@ -35,6 +35,7 @@ import {
   resetTeam,
   resetAllHuntData,
   startHunt,
+  endHunt,
   fetchTeamRoutes,
 } from "@/services/admin";
 import { fetchActiveSessions, adminDeactivateSession, generateLoginToken } from "@/services/auth";
@@ -186,6 +187,16 @@ export default function AdminPage() {
   const [filterSpot, setFilterSpot] = useState("");
   const [editingTeam, setEditingTeam] = useState<string | null>(null);
   const [editTeamName, setEditTeamName] = useState("");
+  const [huntElapsed, setHuntElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!eventConfig?.hunt_started || !eventConfig?.hunt_started_at) { setHuntElapsed(0); return; }
+    const start = new Date(eventConfig.hunt_started_at).getTime();
+    const tick = () => setHuntElapsed(Date.now() - start);
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [eventConfig?.hunt_started, eventConfig?.hunt_started_at]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -303,48 +314,6 @@ export default function AdminPage() {
 
     return (
       <div className="flex flex-col gap-5">
-        {/* Start Hunt card — always visible when teams exist */}
-        {teams.length > 0 && !eventConfig?.hunt_started && (
-          <div
-            className="rounded-[24px] p-6 sm:p-8 text-center"
-            style={{
-              background: "linear-gradient(135deg, #1CB0F6, #0f7ac0)",
-              boxShadow: "0 8px 0 #0f4a9e, 0 16px 32px -8px rgba(0,0,0,0.2)",
-            }}
-          >
-            <p className="text-5xl mb-2">🚀</p>
-            <p className="text-[20px] sm:text-[24px] font-black text-white mb-1">
-              Teams are ready!
-            </p>
-            <p className="text-[14px] font-semibold text-white/80 mb-6">
-              {teams.length} teams generated &mdash; start the hunt to begin timing for all teams simultaneously.
-            </p>
-            <button
-              data-sound="confirm"
-              onClick={() => {
-                setConfirmDef({
-                  title: "Start Hunt",
-                  message: `Start the timer for all ${teams.length} teams simultaneously? They will begin at their first clue.`,
-                });
-                setConfirmHandler(() => async () => {
-                  try {
-                    await startHunt();
-                    flash("🚀 Hunt started! All timers are running.");
-                    await loadData();
-                  } catch { flashError("Failed to start hunt"); }
-                });
-              }}
-              className="btn-press ripple rounded-[24px] px-12 py-5 text-[18px] font-black uppercase tracking-wide text-white transition-all"
-              style={{
-                background: "#FFC800",
-                boxShadow: "0 6px 0 #B88600",
-              }}
-            >
-              🚀 Start Hunt
-            </button>
-          </div>
-        )}
-
         {/* Thin status bar */}
         <div
           className="flex items-center gap-1 overflow-x-auto rounded-2xl px-4 py-2.5 text-[12px] font-extrabold tabular-nums whitespace-nowrap scrollbar-none"
@@ -751,47 +720,6 @@ export default function AdminPage() {
           </div>
         )}
 
-        {teams.length > 0 && !eventConfig?.hunt_started && (
-          <div
-            className="rounded-[24px] p-6 sm:p-8 text-center"
-            style={{
-              background: "linear-gradient(135deg, #1CB0F6, #0f7ac0)",
-              boxShadow: "0 8px 0 #0f4a9e, 0 16px 32px -8px rgba(0,0,0,0.2)",
-            }}
-          >
-            <p className="text-5xl mb-2">🚀</p>
-            <p className="text-[20px] sm:text-[24px] font-black text-white mb-1">
-              Teams are ready!
-            </p>
-            <p className="text-[14px] font-semibold text-white/80 mb-6">
-              {teams.length} teams generated &mdash; start the hunt to begin timing for all teams simultaneously.
-            </p>
-            <button
-              data-sound="confirm"
-              onClick={() => {
-                setConfirmDef({
-                  title: "Start Hunt",
-                  message: `Start the timer for all ${teams.length} teams simultaneously? They will begin at their first clue.`,
-                });
-                setConfirmHandler(() => async () => {
-                  try {
-                    await startHunt();
-                    flash("🚀 Hunt started! All timers are running.");
-                    await loadData();
-                  } catch { flashError("Failed to start hunt"); }
-                });
-              }}
-              className="btn-press ripple rounded-[24px] px-12 py-5 text-[18px] font-black uppercase tracking-wide text-white transition-all"
-              style={{
-                background: "#FFC800",
-                boxShadow: "0 6px 0 #B88600",
-              }}
-            >
-              🚀 Start Hunt
-            </button>
-          </div>
-        )}
-
         <div className="card p-6" style={{ background: "var(--surface)" }}>
           <h3 className="mb-4 text-[15px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-blue)" }}>🏠 All Teams</h3>
           {renderTeamList()}
@@ -803,7 +731,55 @@ export default function AdminPage() {
   function renderRoutes() {
     return (
       <div className="flex flex-col gap-8">
-        {teams.length > 0 && !eventConfig?.hunt_started && (
+        {eventConfig?.hunt_started ? (
+          <div
+            className="rounded-[24px] p-6 sm:p-8 text-center"
+            style={{
+              background: "linear-gradient(135deg, #22c55e, #16a34a)",
+              boxShadow: "0 8px 0 #15803d, 0 16px 32px -8px rgba(0,0,0,0.2)",
+            }}
+          >
+            <p className="text-5xl mb-2">🏃</p>
+            <p className="text-[20px] sm:text-[24px] font-black text-white mb-1">
+              Hunt is Active!
+            </p>
+            <p
+              className="text-[40px] sm:text-[48px] font-black tabular-nums text-white tracking-widest my-4"
+              style={{ fontVariantNumeric: "tabular-nums" }}
+            >
+              {String(Math.floor(huntElapsed / 3600000)).padStart(2, "0")}:
+              {String(Math.floor((huntElapsed % 3600000) / 60000)).padStart(2, "0")}:
+              {String(Math.floor((huntElapsed % 60000) / 1000)).padStart(2, "0")}
+            </p>
+            <p className="text-[14px] font-semibold text-white/80 mb-6">
+              Global hunt timer &mdash; all teams are racing against the clock.
+            </p>
+            <button
+              data-sound="confirm"
+              onClick={() => {
+                setConfirmDef({
+                  title: "End Hunt",
+                  message: "Stop the hunt for all teams? This will freeze all timers.",
+                  destructive: true,
+                });
+                setConfirmHandler(() => async () => {
+                  try {
+                    await endHunt();
+                    flash("🛑 Hunt ended.");
+                    await loadData();
+                  } catch { flashError("Failed to end hunt"); }
+                });
+              }}
+              className="btn-press ripple rounded-[24px] px-12 py-5 text-[18px] font-black uppercase tracking-wide text-white transition-all"
+              style={{
+                background: "#EF4444",
+                boxShadow: "0 6px 0 #B91C1C",
+              }}
+            >
+              🛑 End Hunt
+            </button>
+          </div>
+        ) : teams.length > 0 && (
           <div
             className="rounded-[24px] p-6 sm:p-8 text-center"
             style={{

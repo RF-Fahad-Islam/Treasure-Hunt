@@ -390,6 +390,29 @@ export async function startHunt(): Promise<void> {
   }
 }
 
+export async function endHunt(): Promise<void> {
+  const { error: cfgErr } = await insforge.database
+    .from("event_config")
+    .update({ hunt_started: false })
+    .eq("id", (await fetchEventConfig())?.id ?? "");
+
+  if (cfgErr) throw new Error(`Failed to end hunt: ${cfgErr.message}`);
+
+  const { error: routeErr } = await insforge.database
+    .from("team_routes")
+    .update({
+      status: "pending",
+      clue_started_at: null,
+      clue_solved_at: null,
+      penalty_seconds: null,
+      points_awarded: null,
+      mini_game_started: false,
+    })
+    .neq("status", "pending");
+
+  if (routeErr) throw new Error(`Failed to reset routes: ${routeErr.message}`);
+}
+
 /* ─── Registration management ───────────────────────────────── */
 
 export async function fetchRegistrations(): Promise<Registration[]> {
