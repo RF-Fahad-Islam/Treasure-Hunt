@@ -444,6 +444,7 @@ export default function TeamDashboardPage() {
                           label="Score"
                           value={`${data.team.total_points ?? 0}`}
                           color="#58CC02"
+                          onRefresh={load}
                         />
                         <GamifiedStatCard
                           icon="⏱"
@@ -457,7 +458,9 @@ export default function TeamDashboardPage() {
                             ) : 0)
                           )} pts`}
                           color="#FF4B4B"
+                          onRefresh={load}
                         />
+
                       </div>
                     </Reveal>
 
@@ -687,18 +690,26 @@ function TimeDot() {
   );
 }
 
-function GamifiedStatCard({ icon, label, value, color }: { icon: string; label: string; value: string; color: string }) {
+function GamifiedStatCard({ icon, label, value, color, onRefresh }: { icon: string; label: string; value: string; color: string; onRefresh?: () => void }) {
   return (
     <div className="relative overflow-hidden rounded-[24px] p-5 sm:p-6 transition-all hover:scale-[1.02]"
       style={{ background: "var(--surface)", boxShadow: `0 4px 0 ${color}30, 0 8px 16px -4px var(--border-soft)`, borderTop: `4px solid ${color}` }}>
       <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full pointer-events-none" style={{ background: `radial-gradient(circle, ${color}12 0%, transparent 70%)` }} />
       <div className="relative z-10">
-        <div className="flex items-center gap-2 mb-1">
-          <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 300, damping: 15 }} className="text-lg">{icon}</motion.span>
-          <h4 className="text-[11px] font-extrabold uppercase tracking-[0.15em]" style={{ color: `${color}BB` }}>{label}</h4>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 300, damping: 15 }} className="text-lg">{icon}</motion.span>
+            <h4 className="text-[11px] font-extrabold uppercase tracking-[0.15em]" style={{ color: `${color}BB` }}>{label}</h4>
+          </div>
+          {onRefresh && (
+            <button onClick={onRefresh} className="hover:rotate-180 transition-transform duration-500" style={{ color: "var(--fg-muted)" }}>
+              <RefreshCw size={12} strokeWidth={3} />
+            </button>
+          )}
         </div>
         <motion.span
           initial={{ opacity: 0, y: 8 }}
+
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15, duration: 0.4 }}
           className="text-2xl sm:text-3xl font-black tabular-nums"

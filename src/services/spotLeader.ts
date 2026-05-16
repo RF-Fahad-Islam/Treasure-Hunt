@@ -1,5 +1,5 @@
 import { insforge } from "@/lib/insforge";
-import { secondsToPenaltyPoints } from "@/lib/penalty";
+import { secondsToPenaltyPoints, calculateWeightedPenaltySeconds } from "@/lib/penalty";
 import type { Team, Spot, ClueDefinition, TeamRoute } from "@/types";
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -354,10 +354,10 @@ export async function completeMiniGame(
   teamId: string,
   miniGamePoints: number,         // 10-100 or 0 for skip
 ): Promise<void> {
-  // Fetch current route to check arrival approval + timing
+  // Fetch current route to check arrival approval + timing + weights
   const routeRes = await insforge.database
     .from("team_routes")
-    .select("arrival_approved, arrival_approved_at, clue_started_at, points_awarded")
+    .select("arrival_approved, arrival_approved_at, clue_started_at, points_awarded, timeout_acknowledged_at, help_activated_at")
     .eq("id", routeId)
     .single();
 
@@ -379,10 +379,13 @@ export async function completeMiniGame(
     throw new Error(`Please wait ${remainingMin} more minute(s) before awarding mini-game points (minimum 20 min).`);
   }
 
-  // Auto penalty: 1 point per 4 minutes elapsed since clue start (flat rate)
+  // Weighted penalty: 1pt/4min normally, 1pt/2min after timeout ack
   const now = new Date().toISOString();
-  const elapsedMs = Date.now() - new Date(route.clue_started_at).getTime();
-  const totalPenaltySec = Math.max(0, Math.floor(elapsedMs / 1000));
+  const totalPenaltySec = calculateWeightedPenaltySeconds(
+    route.clue_started_at,
+    now,
+    route.timeout_acknowledged_at
+  );
 
   const teamRes = await insforge.database
     .from("teams")
