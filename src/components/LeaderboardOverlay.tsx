@@ -6,6 +6,7 @@ export type TeamStanding = {
   rank: number;
   team: string;
   score: number;
+  penalty?: number;
   you?: boolean;
   avatarSeed?: string;
 };
@@ -294,6 +295,11 @@ function PodiumColumn({
         >
           {standing.score.toLocaleString()}
         </div>
+        {standing.penalty ? (
+          <div className={`text-[10px] font-black uppercase opacity-60 ${accent.text}`}>
+            -{standing.penalty} pts
+          </div>
+        ) : null}
       </div>
     </motion.div>
   );
@@ -361,9 +367,16 @@ function ListRow({
         )}
       </span>
 
-      <span className="font-display text-base font-extrabold tabular-nums text-[#FF4B4B] dark:text-rose-300 sm:text-[17px]">
-        {standing.score.toLocaleString()}
-      </span>
+      <div className="flex flex-col items-end">
+        <span className="font-display text-base font-extrabold tabular-nums text-[#2B2B2B] dark:text-white sm:text-[17px]">
+          {standing.score.toLocaleString()}
+        </span>
+        {standing.penalty ? (
+          <span className="text-[10px] font-black text-[#FF4B4B] dark:text-rose-400">
+            -{standing.penalty} pts
+          </span>
+        ) : null}
+      </div>
     </motion.li>
   );
 }

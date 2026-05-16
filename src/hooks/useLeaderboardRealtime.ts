@@ -25,7 +25,7 @@ export function useLeaderboard(): LeaderboardEntry[] {
           id: t.id,
           name: t.name,
           score: Math.max(0, (t.total_points ?? 0) - penaltyPoints),
-          penalty: t.total_penalty_seconds ?? 0,
+          penalty: penaltyPoints,
           rank: 0,
           completed: t.hunt_completed ?? false,
           avatarSeed: t.avatar_seed || t.name,

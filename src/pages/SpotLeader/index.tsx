@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
 import { secondsToPenaltyPoints } from "@/lib/penalty";
@@ -9,7 +9,7 @@ import { SuccessOverlay } from "@/components/SuccessOverlay";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { getAvatarUrl } from "@/lib/avatar";
 import { useSession, useAuthStore } from "@/store/authStore";
-import { fetchSpotLeaderData, approveTeam, MINI_GAME_POINTS } from "@/services/spotLeader";
+import { fetchSpotLeaderData, approveArrival, completeMiniGame, MINI_GAME_POINTS } from "@/services/spotLeader";
 import { insertNotification } from "@/services/notifications";
 import type { SpotLeaderData, ArrivingTeam } from "@/services/spotLeader";
 
@@ -22,16 +22,20 @@ export default function SpotLeaderPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successId, setSuccessId] = useState<string | null>(null);
+  const [arrivalBusyId, setArrivalBusyId] = useState<string | null>(null);
   const [miniGameTeam, setMiniGameTeam] = useState<ArrivingTeam | null>(null);
   const [selectedPoints, setSelectedPoints] = useState<number | null>(null);
   const [dialogBusy, setDialogBusy] = useState(false);
-  const [penaltyMinutes, setPenaltyMinutes] = useState(0);
   const [showSuccess, setShowSuccess] = useState(false);
   const [successPoints, setSuccessPoints] = useState(0);
+  const [successTitle, setSuccessTitle] = useState("APPROVED!");
+  const [successSubtitle, setSuccessSubtitle] = useState("Team awarded successfully");
   const [showGlobalView, setShowGlobalView] = useState(false);
   const [confirmDef, setConfirmDef] = useState<{ title: string; message: string; destructive?: boolean } | null>(null);
-  const [confirmHandler, setConfirmHandler] = useState<(() => Promise<void>) | null>(null);
+  const [confirmHandler, setConfirmHandler] = useState<((data?: any) => Promise<void>) | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [, setTick] = useState(0);
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(async () => {
     if (!spotId) return;
@@ -49,56 +53,118 @@ export default function SpotLeaderPage() {
 
   useEffect(() => { void load(); }, [load]);
 
+  // Tick every 10s for live countdown displays
+  useEffect(() => {
+    tickRef.current = setInterval(() => setTick((t) => t + 1), 10000);
+    return () => { if (tickRef.current) clearInterval(tickRef.current); };
+  }, []);
+
   const openMiniGame = (team: ArrivingTeam) => {
     setMiniGameTeam(team);
     setSelectedPoints(null);
-    setPenaltyMinutes(0);
   };
 
   const closeMiniGame = () => {
     setMiniGameTeam(null);
     setSelectedPoints(null);
-    setPenaltyMinutes(0);
   };
 
-  const triggerSuccess = (teamId: string, points: number) => {
+  const triggerSuccess = (teamId: string, points: number, title?: string, subtitle?: string) => {
     setSuccessId(teamId);
     setSuccessPoints(points);
+    setSuccessTitle(title ?? "APPROVED!");
+    setSuccessSubtitle(subtitle ?? "Team awarded successfully");
     setShowSuccess(true);
     setTimeout(() => setSuccessId(null), 2500);
   };
 
-  const handleApproveWithMiniGame = async () => {
+  const MIN_WAIT_MS = 20 * 60 * 1000;
+
+  const canAwardMiniGame = (team: ArrivingTeam) => {
+    if (!team.arrivalApprovedAt) return false;
+    return Date.now() - new Date(team.arrivalApprovedAt).getTime() >= MIN_WAIT_MS;
+  };
+
+  const getRemainingWaitMinutes = (team: ArrivingTeam) => {
+    if (!team.arrivalApprovedAt) return 0;
+    const elapsed = Date.now() - new Date(team.arrivalApprovedAt).getTime();
+    if (elapsed >= MIN_WAIT_MS) return 0;
+    return Math.ceil((MIN_WAIT_MS - elapsed) / 60000);
+  };
+
+  const handleApproveArrival = async (team: ArrivingTeam) => {
+    setArrivalBusyId(team.teamId);
+    setError(null);
+    try {
+      const { pointsAwarded } = await approveArrival(team.routeId, team.teamId);
+      triggerSuccess(
+        team.teamId,
+        pointsAwarded,
+        pointsAwarded > 0 ? "ARRIVAL APPROVED!" : "ARRIVAL APPROVED (0 pts)",
+        pointsAwarded > 0
+          ? `Team earned ${pointsAwarded} points for arrival`
+          : "Team used a hint — no arrival points awarded"
+      );
+      if (pointsAwarded > 0) {
+        insertNotification({
+          team_id: team.teamId,
+          type: "points",
+          title: "Arrival Approved! 📍",
+          message: `Your team earned ${pointsAwarded} points for reaching the spot!`,
+          points: pointsAwarded,
+        }).catch(() => {});
+      }
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Arrival approval failed");
+    } finally {
+      setArrivalBusyId(null);
+    }
+  };
+
+  const handleAwardMiniGame = async () => {
     if (!miniGameTeam || selectedPoints === null) return;
     const { routeId, teamId } = miniGameTeam;
     setDialogBusy(true);
     setError(null);
     try {
-      await approveTeam(routeId, teamId, undefined, selectedPoints, penaltyMinutes || undefined);
-      triggerSuccess(teamId, 100 + selectedPoints);
-      insertNotification({ team_id: teamId, type: "points", title: "Clue Completed! 🎯", message: `Your team earned ${100 + selectedPoints} points!`, points: 100 + selectedPoints }).catch(() => {});
+      await completeMiniGame(routeId, teamId, selectedPoints);
+      triggerSuccess(teamId, selectedPoints, "MINI-GAME AWARDED!", `Team earned +${selectedPoints} bonus points`);
+      insertNotification({
+        team_id: teamId,
+        type: "points",
+        title: "Mini-Game Complete! 🎮",
+        message: `Your team earned +${selectedPoints} bonus points!`,
+        points: selectedPoints,
+      }).catch(() => {});
       closeMiniGame();
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Approval failed");
+      setError(err instanceof Error ? err.message : "Mini-game approval failed");
     } finally {
       setDialogBusy(false);
     }
   };
 
-  const handleApproveSkip = async () => {
+  const handleSkipMiniGame = async () => {
     if (!miniGameTeam) return;
     const { routeId, teamId } = miniGameTeam;
     setDialogBusy(true);
     setError(null);
     try {
-      await approveTeam(routeId, teamId, undefined, undefined, penaltyMinutes || undefined);
-      triggerSuccess(teamId, 100);
-      insertNotification({ team_id: teamId, type: "points", title: "Clue Completed! 🎯", message: "Your team earned 100 points!", points: 100 }).catch(() => {});
+      await completeMiniGame(routeId, teamId, 0);
+      triggerSuccess(teamId, 0, "CLUE COMPLETED!", "Team advanced to the next clue (0 bonus points)");
+      insertNotification({
+        team_id: teamId,
+        type: "points",
+        title: "Clue Completed! 🎯",
+        message: "Your team advanced to the next clue!",
+        points: 0,
+      }).catch(() => {});
       closeMiniGame();
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Approval failed");
+      setError(err instanceof Error ? err.message : "Mini-game approval failed");
     } finally {
       setDialogBusy(false);
     }
@@ -124,8 +190,8 @@ export default function SpotLeaderPage() {
         open={showSuccess}
         onClose={() => setShowSuccess(false)}
         pointsEarned={successPoints}
-        title="APPROVED!"
-        subtitle="Team awarded successfully"
+        title={successTitle}
+        subtitle={successSubtitle}
       />
 
       <ConfirmDialog
@@ -478,27 +544,67 @@ export default function SpotLeaderPage() {
                         )}
                       </div>
 
-                      <motion.button
-                        whileTap={{ scale: 0.92 }}
-                        onClick={() => openMiniGame(team)}
-                        disabled={successId === team.teamId}
-                        className="w-full sm:w-auto shrink-0 rounded-[20px] sm:rounded-[24px] px-8 sm:px-10 py-3.5 sm:py-6 text-[15px] sm:text-[17px] font-black uppercase tracking-wide text-white transition-all"
-                        style={{
-                          background:
-                            successId === team.teamId
-                              ? "#58CC02"
-                              : "linear-gradient(135deg, #1CB0F6, #0f7ac0)",
-                          boxShadow: successId === team.teamId
-                            ? "0 4px 0 #3A8400"
-                            : "0 4px 0 #0f4a9e",
-                          opacity: successId === team.teamId ? 0.7 : 1,
-                          cursor: successId === team.teamId ? "not-allowed" : "pointer",
-                        }}
-                      >
-                        {successId === team.teamId
-                          ? "✅ Approved!"
-                          : "✅ Approve"}
-                      </motion.button>
+                      {/* Step 1: Approve Arrival */}
+                      {!team.arrivalApproved ? (
+                        <motion.button
+                          whileTap={{ scale: 0.92 }}
+                          onClick={() => handleApproveArrival(team)}
+                          disabled={arrivalBusyId === team.teamId || successId === team.teamId}
+                          className="w-full sm:w-auto shrink-0 rounded-[20px] sm:rounded-[24px] px-8 sm:px-10 py-3.5 sm:py-6 text-[15px] sm:text-[17px] font-black uppercase tracking-wide text-white transition-all"
+                          style={{
+                            background:
+                              successId === team.teamId
+                                ? "#58CC02"
+                                : "linear-gradient(135deg, #1CB0F6, #0f7ac0)",
+                            boxShadow: successId === team.teamId
+                              ? "0 4px 0 #3A8400"
+                              : "0 4px 0 #0f4a9e",
+                            opacity: arrivalBusyId === team.teamId || successId === team.teamId ? 0.7 : 1,
+                            cursor: arrivalBusyId === team.teamId || successId === team.teamId ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          {arrivalBusyId === team.teamId
+                            ? "⏳"
+                            : successId === team.teamId
+                              ? "✅ Approved!"
+                              : "📍 Approve Arrival"}
+                        </motion.button>
+                      ) : team.miniGamePlayed ? (
+                        /* Completed */
+                        <span className="w-full sm:w-auto shrink-0 rounded-[20px] sm:rounded-[24px] px-8 sm:px-10 py-3.5 sm:py-6 text-[15px] sm:text-[17px] font-black uppercase tracking-wide text-center"
+                          style={{ background: "#58CC02", color: "#fff", boxShadow: "0 4px 0 #3A8400" }}>
+                          ✅ Done
+                        </span>
+                      ) : (
+                        /* Step 2: Award Mini-Game */
+                        <div className="flex flex-col items-center sm:items-end gap-2 w-full sm:w-auto">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wide"
+                            style={{ color: "#58CC02" }}>
+                            📍 Arrival Approved
+                          </span>
+                          <motion.button
+                            whileTap={{ scale: 0.92 }}
+                            onClick={() => openMiniGame(team)}
+                            disabled={!canAwardMiniGame(team)}
+                            className="w-full sm:w-auto shrink-0 rounded-[20px] sm:rounded-[24px] px-8 sm:px-10 py-3.5 sm:py-6 text-[15px] sm:text-[17px] font-black uppercase tracking-wide text-white transition-all"
+                            style={{
+                              background: canAwardMiniGame(team)
+                                ? "linear-gradient(135deg, #FFC800, #E5A800)"
+                                : "var(--accent-on-surface)",
+                              boxShadow: canAwardMiniGame(team)
+                                ? "0 4px 0 #B88600"
+                                : "0 3px 0 var(--border-soft)",
+                              color: canAwardMiniGame(team) ? "#fff" : "var(--fg-muted)",
+                              cursor: canAwardMiniGame(team) ? "pointer" : "not-allowed",
+                              opacity: canAwardMiniGame(team) ? 1 : 0.6,
+                            }}
+                          >
+                            {canAwardMiniGame(team)
+                              ? "🎮 Award Mini-Game"
+                              : `⏳ Wait ${getRemainingWaitMinutes(team)} min`}
+                          </motion.button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </Reveal>
@@ -516,7 +622,7 @@ export default function SpotLeaderPage() {
         </Reveal>
       </div>
 
-      {/* Mini-Game Dialog — Gamified */}
+      {/* Step 2 Dialog: Award Mini-Game Points */}
       <AnimatePresence>
         {miniGameTeam && (
           <motion.div
@@ -554,11 +660,47 @@ export default function SpotLeaderPage() {
                 initial={{ y: 8, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.15 }}
-                className="mb-6 sm:mb-8 text-center text-[14px] sm:text-[15px] font-semibold"
+                className="mb-2 text-center text-[14px] sm:text-[15px] font-semibold"
                 style={{ color: "var(--fg-muted)" }}
               >
-                Approve team &amp; award points
+                Step 2: Award mini-game points
               </motion.p>
+
+              {/* Arrival approved indicator */}
+              <motion.div
+                initial={{ y: 8, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.18 }}
+                className="mb-6 rounded-2xl p-3 text-center"
+                style={{ background: "rgba(88,204,2,0.08)", border: "1px solid rgba(88,204,2,0.2)" }}
+              >
+                <span className="text-[12px] font-extrabold" style={{ color: "#58CC02" }}>
+                  ✅ Arrival approved
+                </span>
+                <span className="text-[11px] font-semibold ml-2" style={{ color: "var(--fg-muted)" }}>
+                  {miniGameTeam.arrivalApprovedAt
+                    ? new Date(miniGameTeam.arrivalApprovedAt).toLocaleTimeString()
+                    : ""}
+                </span>
+              </motion.div>
+
+              {/* Countdown if < 20 min */}
+              {!canAwardMiniGame(miniGameTeam) && (
+                <motion.div
+                  initial={{ y: 8, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="mb-5 rounded-2xl p-4 text-center"
+                  style={{ background: "rgba(255,200,0,0.1)", border: "1px solid rgba(255,200,0,0.25)" }}
+                >
+                  <p className="text-[13px] font-bold" style={{ color: "#FFC800" }}>
+                    ⏳ Waiting period active
+                  </p>
+                  <p className="text-[11px] font-semibold mt-1" style={{ color: "var(--fg-muted)" }}>
+                    Please wait {getRemainingWaitMinutes(miniGameTeam)} more minute(s) before awarding mini-game points (minimum 20 min after arrival).
+                  </p>
+                </motion.div>
+              )}
 
               {/* Mini-Game Points */}
               <motion.div
@@ -567,10 +709,10 @@ export default function SpotLeaderPage() {
                 transition={{ delay: 0.2 }}
               >
                 <p className="mb-3 text-[12px] sm:text-[14px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "#FFC800" }}>
-                  🎯 Play Mini-Game
+                  🎯 Bonus Points
                 </p>
                 <p className="mb-4 text-[13px] sm:text-[14px] font-semibold" style={{ color: "var(--fg-muted)" }}>
-                  Select bonus points (on top of +100):
+                  Select points to award:
                 </p>
                 <div className="mb-6 flex flex-wrap justify-center sm:justify-start gap-2">
                   {MINI_GAME_POINTS.map((p) => (
@@ -592,45 +734,17 @@ export default function SpotLeaderPage() {
                 </div>
               </motion.div>
 
-              {/* Penalty */}
+              {/* Auto penalty info */}
               <motion.div
                 initial={{ y: 10, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.25 }}
+                className="mb-6 rounded-2xl p-3"
+                style={{ background: "rgba(255,75,75,0.06)", border: "1px solid rgba(255,75,75,0.15)" }}
               >
-                <p className="mb-3 text-[12px] sm:text-[14px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "#FF4B4B" }}>
-                  ⏳ Penalty (optional)
+                <p className="text-[11px] font-bold text-center" style={{ color: "var(--fg-muted)" }}>
+                  ⏱ Auto penalty: <strong style={{ color: "#FF4B4B" }}>1 point</strong> deducted every 4 minutes from clue start
                 </p>
-                <div className="mb-8 flex items-center justify-center sm:justify-start gap-4">
-                  <motion.button
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => setPenaltyMinutes(Math.max(0, penaltyMinutes - 1))}
-                    className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl text-[18px] sm:text-[22px] font-extrabold"
-                    style={{ background: "var(--accent-on-surface)", color: "var(--fg)" }}
-                  >
-                    −
-                  </motion.button>
-                  <span className="min-w-[4rem] sm:min-w-[5rem] text-center text-[28px] sm:text-[32px] font-extrabold tabular-nums" style={{ color: "#FF4B4B" }}>
-                    {penaltyMinutes}m
-                  </span>
-                  <motion.button
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => setPenaltyMinutes(penaltyMinutes + 1)}
-                    className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl text-[18px] sm:text-[22px] font-extrabold"
-                    style={{ background: "var(--accent-on-surface)", color: "var(--fg)" }}
-                  >
-                    +
-                  </motion.button>
-                  {penaltyMinutes > 0 && (
-                    <button
-                      onClick={() => setPenaltyMinutes(0)}
-                      className="rounded-2xl px-3 py-1.5 text-[11px] sm:text-[12px] font-extrabold uppercase tracking-wide"
-                      style={{ color: "var(--fg-muted)" }}
-                    >
-                      ✕ Clear
-                    </button>
-                  )}
-                </div>
               </motion.div>
 
               <div className="flex flex-col gap-3">
@@ -638,33 +752,43 @@ export default function SpotLeaderPage() {
                   initial={{ x: -20, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
                   transition={{ delay: 0.3 }}
-                  onClick={handleApproveWithMiniGame}
-                  disabled={selectedPoints === null || dialogBusy}
+                  onClick={handleAwardMiniGame}
+                  disabled={selectedPoints === null || dialogBusy || !canAwardMiniGame(miniGameTeam)}
                   className="w-full rounded-2xl px-8 py-3.5 sm:py-4 text-[15px] sm:text-[16px] font-extrabold uppercase tracking-wide text-white transition-all"
                   style={{
-                    background: "#FFC800",
-                    boxShadow: "0 4px 0 rgba(200,150,0,0.5)",
-                    opacity: selectedPoints === null || dialogBusy ? 0.4 : 1,
-                    cursor: selectedPoints === null || dialogBusy ? "not-allowed" : "pointer",
+                    background: canAwardMiniGame(miniGameTeam) ? "#FFC800" : "var(--accent-on-surface)",
+                    boxShadow: canAwardMiniGame(miniGameTeam) ? "0 4px 0 rgba(200,150,0,0.5)" : "0 3px 0 var(--border-soft)",
+                    color: canAwardMiniGame(miniGameTeam) ? "#fff" : "var(--fg-muted)",
+                    opacity: selectedPoints === null || dialogBusy || !canAwardMiniGame(miniGameTeam) ? 0.5 : 1,
+                    cursor: selectedPoints === null || dialogBusy || !canAwardMiniGame(miniGameTeam) ? "not-allowed" : "pointer",
                   }}
                 >
-                  {dialogBusy ? "⏳ Processing…" : `🎮 Approve with +${selectedPoints ?? 0} pts`}
+                  {dialogBusy
+                    ? "⏳ Processing…"
+                    : !canAwardMiniGame(miniGameTeam)
+                      ? `⏳ Wait ${getRemainingWaitMinutes(miniGameTeam)} min`
+                      : `🎮 Award +${selectedPoints ?? 0} pts`}
                 </motion.button>
 
                 <motion.button
                   initial={{ y: 10, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ delay: 0.35 }}
-                  onClick={handleApproveSkip}
-                  disabled={dialogBusy}
-                  className="w-full rounded-2xl px-8 py-3.5 sm:py-4 text-[15px] sm:text-[16px] font-extrabold uppercase tracking-wide text-white transition-all"
+                  onClick={handleSkipMiniGame}
+                  disabled={dialogBusy || !canAwardMiniGame(miniGameTeam)}
+                  className="w-full rounded-2xl px-8 py-3.5 sm:py-4 text-[15px] sm:text-[16px] font-extrabold uppercase tracking-wide transition-all"
                   style={{
-                    background: "#58CC02",
-                    boxShadow: "0 4px 0 #3A8400",
-                    opacity: dialogBusy ? 0.5 : 1,
+                    background: canAwardMiniGame(miniGameTeam) ? "#58CC02" : "var(--accent-on-surface)",
+                    boxShadow: canAwardMiniGame(miniGameTeam) ? "0 4px 0 #3A8400" : "0 3px 0 var(--border-soft)",
+                    color: canAwardMiniGame(miniGameTeam) ? "#fff" : "var(--fg-muted)",
+                    opacity: dialogBusy || !canAwardMiniGame(miniGameTeam) ? 0.5 : 1,
                   }}
                 >
-                  {dialogBusy ? "⏳ Processing…" : "⏭ Skip Game · +100 pts"}
+                  {dialogBusy
+                    ? "⏳ Processing…"
+                    : !canAwardMiniGame(miniGameTeam)
+                      ? `⏳ Wait ${getRemainingWaitMinutes(miniGameTeam)} min`
+                      : "⏭ Skip · 0 bonus pts"}
                 </motion.button>
 
                 <motion.button

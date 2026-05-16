@@ -83,6 +83,7 @@ export interface TeamRoute {
   mini_game_points: number | null;
   penalty_seconds: number | null;
   help_activated_at: string | null;
+  timeout_acknowledged_at: string | null;
   approved_by_spot_leader: boolean | null;
   created_at: string | null;
 }

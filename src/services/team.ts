@@ -206,7 +206,8 @@ export async function activateHelpMode(routeId: string): Promise<void> {
     .from("team_routes")
     .update({ 
       help_activated_at: new Date().toISOString(),
-      status: "active" // Keep it active
+      timeout_acknowledged_at: new Date().toISOString(),
+      status: "active"
     })
     .eq("id", routeId);
 
@@ -218,7 +219,10 @@ export async function activateHelpMode(routeId: string): Promise<void> {
 export async function keepSearching(routeId: string): Promise<void> {
   const { error } = await insforge.database
     .from("team_routes")
-    .update({ status: "active" })
+    .update({ 
+      status: "active",
+      timeout_acknowledged_at: new Date().toISOString() 
+    })
     .eq("id", routeId);
 
   if (error) throw new Error(error.message);

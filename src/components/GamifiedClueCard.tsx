@@ -10,6 +10,7 @@ interface Props {
   streak: number;
   clueStartedAt: string | null;
   helpActivatedAt?: string | null;
+  timeoutAckAt?: string | null;
   timeLimitMinutes: number;
   onTimeout: () => void;
   showTimeout: boolean;
@@ -19,7 +20,7 @@ interface Props {
 
 export function GamifiedClueCard({
   clueDefinition, spot, completedClues, totalClues,
-  streak, clueStartedAt, helpActivatedAt, timeLimitMinutes, onTimeout, showTimeout,
+  streak, clueStartedAt, helpActivatedAt, timeoutAckAt, timeLimitMinutes, onTimeout, showTimeout,
   locked, huntStartsIn,
 }: Props) {
   const progress = totalClues > 0 ? (completedClues / totalClues) * 100 : 0;
@@ -111,6 +112,7 @@ export function GamifiedClueCard({
         <div className="mb-5">
           <ClueTimer
             startedAt={clueStartedAt}
+            timeoutAckAt={timeoutAckAt}
             timeLimitMinutes={timeLimitMinutes}
             onTimeout={onTimeout}
             paused={showTimeout}

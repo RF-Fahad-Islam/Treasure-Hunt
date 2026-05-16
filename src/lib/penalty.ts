@@ -17,7 +17,7 @@ export const HELP_PENALTY_RATE_SECONDS = 120;   // 2 minutes
 export function calculateWeightedPenaltySeconds(
   startedAt: string | null,
   solvedAt: string | null,
-  helpAt: string | null
+  timeoutAckAt: string | null
 ): number {
   if (!startedAt) return 0;
   
@@ -26,28 +26,28 @@ export function calculateWeightedPenaltySeconds(
   
   if (end <= start) return 0;
 
-  if (!helpAt) {
+  if (!timeoutAckAt) {
     // Normal mode only
     return Math.floor((end - start) / 1000);
   }
 
-  const help = new Date(helpAt).getTime();
+  const ack = new Date(timeoutAckAt).getTime();
 
-  if (help <= start) {
-    // Help was active from the beginning (shouldn't happen, but just in case)
+  if (ack <= start) {
+    // Acknowledged from the beginning (shouldn't happen)
     return Math.floor((end - start) / 1000) * 2;
   }
 
-  if (help >= end) {
-    // Help was activated after solving (shouldn't happen)
+  if (ack >= end) {
+    // Acknowledged after solving
     return Math.floor((end - start) / 1000);
   }
 
-  // Split into pre-help and post-help
-  const preHelpSeconds = Math.floor((help - start) / 1000);
-  const postHelpSeconds = Math.floor((end - help) / 1000);
+  // Split into pre-ack and post-ack
+  const preAckSeconds = Math.floor((ack - start) / 1000);
+  const postAckSeconds = Math.floor((end - ack) / 1000);
 
-  return preHelpSeconds + (postHelpSeconds * 2);
+  return preAckSeconds + (postAckSeconds * 2);
 }
 
 /**

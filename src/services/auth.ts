@@ -549,6 +549,9 @@ export async function loginTeamById(
     throw new Error("Team not found.");
 
   const team = teamRows[0] as { id: string; name: string; team_code: string };
+  if (team.team_code.toUpperCase() !== teamCode.trim().toUpperCase()) {
+    throw new Error("Invalid team code associated with this token.");
+  }
 
   const { data: participants, error: partErr } = await insforge.database
     .from("participants")

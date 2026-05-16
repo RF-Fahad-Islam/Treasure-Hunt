@@ -16,7 +16,7 @@ import { TeamLogoEditModal } from "@/components/TeamLogoEditModal";
 import { GamifiedClueCard } from "@/components/GamifiedClueCard";
 import { useSession } from "@/store/authStore";
 import { useLeaderboard } from "@/hooks/useLeaderboardRealtime";
-import { fetchDashboardData, fetchTeamMembers, fetchAllTeamsForLobby, updateTeamName, updateTeamAvatarSeed, activateHelpMode } from "@/services/team";
+import { fetchDashboardData, fetchTeamMembers, fetchAllTeamsForLobby, updateTeamName, updateTeamAvatarSeed, activateHelpMode, keepSearching } from "@/services/team";
 import { calculateWeightedPenaltySeconds, secondsToPenaltyPoints } from "@/lib/penalty";
 import type { DashboardData, TeamLobbyEntry } from "@/services/team";
 import type { Participant } from "@/types";
@@ -147,10 +147,26 @@ export default function TeamDashboardPage() {
   }, [data, leaderboard]);
 
   const handleTimeout = useCallback(() => {
+    if (data?.currentRoute?.timeout_acknowledged_at) return;
     if (data?.currentRoute?.status === "active" || data?.currentRoute?.status === "pending") {
       setShowTimeout(true);
     }
   }, [data]);
+
+  const handleContinueSolving = async () => {
+    if (!data?.currentRoute) {
+      setShowTimeout(false);
+      return;
+    }
+    try {
+      await keepSearching(data.currentRoute.id);
+      setShowTimeout(false);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to acknowledge timeout");
+      setShowTimeout(false);
+    }
+  };
 
   const handleReveal = async () => {
     if (!data?.currentRoute || !teamId) return;
@@ -231,7 +247,7 @@ export default function TeamDashboardPage() {
       <SuccessOverlay open={showSuccess} onClose={() => setShowSuccess(false)} pointsEarned={successPoints} newRank={successRank} />
       <ExpiredOverlay 
         open={showTimeout} 
-        onContinue={() => setShowTimeout(false)} 
+        onContinue={handleContinueSolving} 
         onReveal={() => setShowConfirmReveal(true)} 
       />
       <ConfirmDialog
@@ -251,6 +267,7 @@ export default function TeamDashboardPage() {
           rank: e.rank,
           team: e.name,
           score: e.score,
+          penalty: e.penalty,
           you: e.name === data?.team.name,
           avatarSeed: e.avatarSeed,
         }))}
@@ -423,14 +440,7 @@ export default function TeamDashboardPage() {
                         <GamifiedStatCard
                           icon="⭐"
                           label="Score"
-                          value={`${Math.max(0, (data.team.total_points ?? 0) - secondsToPenaltyPoints(
-                            (data.team.total_penalty_seconds ?? 0) + 
-                            (data.currentRoute ? calculateWeightedPenaltySeconds(
-                              data.currentRoute.clue_started_at,
-                              data.currentRoute.clue_solved_at,
-                              data.currentRoute.help_activated_at
-                            ) : 0)
-                          ))}`}
+                          value={`${data.team.total_points ?? 0}`}
                           color="#58CC02"
                         />
                         <GamifiedStatCard
@@ -441,7 +451,7 @@ export default function TeamDashboardPage() {
                             (data.currentRoute ? calculateWeightedPenaltySeconds(
                               data.currentRoute.clue_started_at,
                               data.currentRoute.clue_solved_at,
-                              data.currentRoute.help_activated_at
+                              data.currentRoute.timeout_acknowledged_at
                             ) : 0)
                           )} pts`}
                           color="#FF4B4B"
@@ -488,6 +498,7 @@ export default function TeamDashboardPage() {
                         streak={streakCountRef.current}
                         clueStartedAt={data.currentRoute?.clue_started_at ?? null}
                         helpActivatedAt={data.currentRoute?.help_activated_at ?? null}
+                        timeoutAckAt={data.currentRoute?.timeout_acknowledged_at ?? null}
                         timeLimitMinutes={data.eventConfig?.clue_time_limit_minutes ?? 40}
                         onTimeout={handleTimeout}
                         showTimeout={showTimeout}
@@ -699,7 +710,7 @@ function GamifiedStatCard({ icon, label, value, color }: { icon: string; label: 
 const AVATAR_COLORS = ["#1CB0F6", "#EC4899", "#8B5CF6", "#FF9500", "#22D3EE", "#A3E635"];
 
 function LiveStandingsSection({ leaderboard, myTeamName, showLeaderboard, onRefresh }: {
-  leaderboard: { id: string; rank: number; name: string; score: number; avatarSeed: string }[];
+  leaderboard: { id: string; rank: number; name: string; score: number; penalty: number; avatarSeed: string }[];
   myTeamName: string;
   showLeaderboard: () => void;
   onRefresh?: () => void;
@@ -771,7 +782,12 @@ function LiveStandingsSection({ leaderboard, myTeamName, showLeaderboard, onRefr
                 {entry.name}
                 {isMe && <span className="ml-1.5 text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full" style={{ background: "rgba(88,204,2,0.15)", color: "#58CC02" }}>You</span>}
               </span>
-              <span className="text-[14px] font-black tabular-nums" style={{ color: "#58CC02" }}>{entry.score.toLocaleString()}</span>
+              <div className="flex flex-col items-end">
+                <span className="text-[14px] font-black tabular-nums leading-none" style={{ color: "var(--fg)" }}>{entry.score.toLocaleString()}</span>
+                {entry.penalty > 0 && (
+                  <span className="text-[9px] font-black text-[#FF4B4B] mt-0.5">-{entry.penalty} pts</span>
+                )}
+              </div>
             </motion.div>
           );
         })}
