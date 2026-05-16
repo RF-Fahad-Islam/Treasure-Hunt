@@ -80,9 +80,9 @@ export default function TeamDashboardPage() {
   const streakCountRef = useRef(0);
 
   const leaderboard = useLeaderboard();
-  const { display: countdown, expired: huntStarted } = useCountdown(data?.eventConfig?.event_start_time ?? null);
+  const { display: countdown } = useCountdown(data?.eventConfig?.event_start_time ?? null);
 
-  const isHuntActive = data?.eventConfig?.hunt_started === true || huntStarted;
+  const isHuntActive = data?.eventConfig?.hunt_started === true;
 
   const huntStartsIn = countdown ? `${countdown.d > 0 ? `${countdown.d}d ` : ""}${countdown.h}h ${countdown.m}m ${countdown.s}s` : null;
 

@@ -33,20 +33,22 @@ async function createSession(
 ): Promise<void> {
   const deviceInfo = getDeviceInfo();
 
-  // Deactivate old sessions for this user
-  await insforge.database
+  const { error: deactErr } = await insforge.database
     .from("sessions")
     .update({ is_active: false })
     .eq("user_id", userId)
     .eq("user_role", userRole);
 
-  // Insert new session
-  await insforge.database.from("sessions").insert([{
+  if (deactErr) throw new Error(`Failed to deactivate old session: ${deactErr.message}`);
+
+  const { error: insertErr } = await insforge.database.from("sessions").insert([{
     user_id: userId,
     user_role: userRole,
     session_token: token,
     device_info: deviceInfo,
   }]);
+
+  if (insertErr) throw new Error(`Failed to create session: ${insertErr.message}`);
 }
 
 /* ─── Roll Lookup ───────────────────────────────────────────── */
@@ -379,12 +381,12 @@ export async function loginTeam(
     .select("id, name, roll, avatar_emoji")
     .eq("team_id", team.id)
     .eq("is_leader", true)
-    .ilike("name", `%${trimId}%`)
+    .or(`name.ilike.%${trimId}%,roll.ilike.%${trimId}%`)
     .limit(1);
 
   if (partErr) throw new Error(`Database error: ${partErr.message}`);
   if (!participants || participants.length === 0)
-    throw new Error("Only team leaders can log in. If you are the leader, check your name with the organiser.");
+    throw new Error("Only team leaders can log in. Make sure you are the leader and your name/roll is correct.");
 
   const participant = participants[0] as { id: string; name: string; roll: string; avatar_emoji: string | null };
   const sessionToken = generateToken();
