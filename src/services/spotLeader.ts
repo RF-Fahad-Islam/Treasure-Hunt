@@ -374,7 +374,7 @@ export async function completeMiniGame(
   // Fetch current route to check arrival approval + timing + weights
   const routeRes = await insforge.database
     .from("team_routes")
-    .select("arrival_approved, arrival_approved_at, clue_started_at, clue_solved_at, penalty_seconds, points_awarded, timeout_acknowledged_at, help_activated_at")
+    .select("arrival_approved, arrival_approved_at, clue_started_at, clue_solved_at, help_activated_at, timeout_acknowledged_at, points_awarded")
     .eq("id", routeId)
     .single();
 
@@ -396,7 +396,7 @@ export async function completeMiniGame(
     throw new Error(`Please wait ${remainingMin} more minute(s) before awarding mini-game points (minimum 20 min).`);
   }
 
-  // Use existing clue_solved_at if already set by approveArrival, otherwise now
+  // Auto penalty: uses weighted calculation based on acknowledgment timestamp
   const now = new Date().toISOString();
   const solvedAt = route.clue_solved_at ?? now;
   const penaltyAlreadyApplied = route.penalty_seconds != null;
