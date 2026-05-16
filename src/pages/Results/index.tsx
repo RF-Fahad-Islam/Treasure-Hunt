@@ -5,6 +5,7 @@ import { Logo } from "@/components/Logo";
 import { Confetti } from "@/components/Confetti";
 import { CountUp } from "@/components/CountUp";
 import { insforge } from "@/lib/insforge";
+import { secondsToPenaltyPoints } from "@/lib/penalty";
 import type { Team } from "@/types";
 
 const MEDAL = ["🥇", "🥈", "🥉"];
@@ -17,10 +18,18 @@ export default function ResultsPage() {
   useEffect(() => {
     insforge.database.from("teams")
       .select("*")
-      .order("total_points", { ascending: false })
-      .order("total_penalty_seconds", { ascending: true })
       .then(({ data, error }) => {
-        if (!error) setTeams((data ?? []) as Team[]);
+        if (!error) {
+          const rawTeams = (data ?? []) as Team[];
+          const calculatedTeams = rawTeams.map(t => {
+            const penaltyPoints = secondsToPenaltyPoints(t.total_penalty_seconds ?? 0);
+            return {
+              ...t,
+              calculatedScore: Math.max(0, (t.total_points ?? 0) - penaltyPoints)
+            };
+          }).sort((a, b) => b.calculatedScore - a.calculatedScore || (a.total_penalty_seconds ?? 0) - (b.total_penalty_seconds ?? 0));
+          setTeams(calculatedTeams as any);
+        }
         setLoading(false);
       });
   }, []);
@@ -105,7 +114,7 @@ export default function ResultsPage() {
                     }}
                   >
                     <span className="text-[28px] font-extrabold tabular-nums" style={{ color: idx === 0 ? "#000" : "var(--fg)" }}>
-                      <CountUp to={t.total_points ?? 0} />
+                      <CountUp to={t.calculatedScore ?? 0} />
                     </span>
                   </motion.div>
                 </motion.div>
@@ -138,7 +147,7 @@ export default function ResultsPage() {
                 </span>
               )}
               <span className="text-[20px] font-extrabold tabular-nums" style={{ color: "var(--color-brand-green)" }}>
-                <CountUp to={t.total_points ?? 0} />
+                <CountUp to={t.calculatedScore ?? 0} />
               </span>
             </motion.div>
           ))}

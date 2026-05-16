@@ -1,16 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
+
+import { secondsToPenaltyPoints } from "@/lib/penalty";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Reveal } from "@/components/Reveal";
 import { SuccessOverlay } from "@/components/SuccessOverlay";
-import { BroadcastBanner } from "@/components/BroadcastBanner";
-import { TeamMap } from "@/components/TeamMap";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { getAvatarUrl } from "@/lib/avatar";
-import { useBroadcastListener } from "@/hooks/useBroadcastListener";
-import { useTeamLocationsRealtime } from "@/hooks/useTeamLocationsRealtime";
-import { useProximityAlert } from "@/hooks/useProximityAlert";
 import { useSession, useAuthStore } from "@/store/authStore";
 import { fetchSpotLeaderData, approveTeam, MINI_GAME_POINTS } from "@/services/spotLeader";
 import { insertNotification } from "@/services/notifications";
@@ -32,21 +29,6 @@ export default function SpotLeaderPage() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [successPoints, setSuccessPoints] = useState(0);
   const [showGlobalView, setShowGlobalView] = useState(false);
-  const sessionRole = session?.role === "spot-leader" ? "spot-leader" : null;
-  const broadcast = useBroadcastListener(sessionRole);
-  const teamLocations = useTeamLocationsRealtime();
-
-  // Compute arriving team IDs from data
-  const arrivingIds = new Set(data?.arrivingTeams.map(t => t.teamId) || []);
-
-  const { nearbyTeamIds, justArrivedTeamIds } = useProximityAlert(
-    data?.spot?.latitude ?? null,
-    data?.spot?.longitude ?? null,
-    data?.spot?.radius_meters ?? null,
-    teamLocations,
-    arrivingIds,
-  );
-
   const [confirmDef, setConfirmDef] = useState<{ title: string; message: string; destructive?: boolean } | null>(null);
   const [confirmHandler, setConfirmHandler] = useState<(() => Promise<void>) | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
@@ -124,10 +106,10 @@ export default function SpotLeaderPage() {
 
   if (!spotId) {
     return (
-    <div className="relative min-h-screen overflow-hidden pb-6" style={{ background: "#F7F7F7", paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom, 0px))" }}>
+    <div className="relative min-h-screen overflow-hidden pb-6" style={{ background: "var(--bg)", paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom, 0px))" }}>
         <div className="flex min-h-screen flex-col items-center justify-center p-8">
           <p className="text-5xl">🔐</p>
-          <p className="mt-4 font-display text-2xl font-extrabold" style={{ color: "#777777" }}>
+          <p className="mt-4 font-display text-2xl font-extrabold" style={{ color: "var(--fg-muted)" }}>
             Not logged in
           </p>
         </div>
@@ -135,11 +117,8 @@ export default function SpotLeaderPage() {
     );
   }
 
-  // Filter map teams to only those assigned to this spot
-  const mapTeams = teamLocations.filter(t => arrivingIds.has(t.id));
-
   return (
-    <div className="relative min-h-screen overflow-hidden" style={{ background: "#F7F7F7" }}>
+    <div className="relative min-h-screen overflow-hidden" style={{ background: "var(--bg)" }}>
 
       <SuccessOverlay
         open={showSuccess}
@@ -163,9 +142,7 @@ export default function SpotLeaderPage() {
         onCancel={() => { setConfirmDef(null); setConfirmHandler(null); }}
       />
 
-      <BroadcastBanner broadcast={broadcast} />
-
-      <div className="relative z-20 flex items-center justify-between px-4 py-4 sm:px-8" style={{ background: "#FFFFFF", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+      <div className="relative z-20 flex items-center justify-between px-4 py-4 sm:px-8" style={{ background: "var(--surface)", borderBottom: "1px solid var(--border-soft)" }}>
         <Logo className="h-10 w-10 sm:h-12 sm:w-12" />
         <div className="flex items-center gap-2 sm:gap-3">
           {session?.role === "spot-leader" && (
@@ -179,7 +156,7 @@ export default function SpotLeaderPage() {
               setConfirmHandler(async () => { clearSession(); });
             }}
             className="rounded-full px-4 sm:px-6 py-2 sm:py-2.5 text-[12px] sm:text-[14px] font-black uppercase tracking-wide transition-all"
-            style={{ color: "#777777", background: "#F0F0F0", boxShadow: "0 2px 0 rgba(0,0,0,0.06)" }}
+            style={{ color: "var(--fg-muted)", background: "var(--accent-on-surface)", boxShadow: "0 2px 0 var(--border-soft)" }}
           >
             🚪 Logout
           </button>
@@ -191,56 +168,16 @@ export default function SpotLeaderPage() {
 
         <Reveal duration={0.5}>
           <header className="mb-8 text-center">
-            <h1 className="font-display text-[28px] sm:text-[32px] font-black" style={{ color: "#2B2B2B" }}>
+            <h1 className="font-display text-[28px] sm:text-[32px] font-black" style={{ color: "var(--fg)" }}>
               {data?.spot.name ?? "Spot Leader"}
             </h1>
-            <p className="mt-2 text-[13px] sm:text-[15px] font-black uppercase tracking-[0.2em]" style={{ color: "#777777" }}>
+            <p className="mt-2 text-[13px] sm:text-[15px] font-black uppercase tracking-[0.2em]" style={{ color: "var(--fg-muted)" }}>
               📍 {data?.spot.location_hint ?? ""}
             </p>
           </header>
         </Reveal>
 
-        <AnimatePresence>
-          {(justArrivedTeamIds.length > 0 || nearbyTeamIds.length > 0) && (
-            <motion.div
-              initial={{ opacity: 0, y: -20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -20, scale: 0.95 }}
-              className="mb-8 overflow-hidden rounded-[24px] p-6"
-              style={{
-                background: justArrivedTeamIds.length > 0
-                  ? "linear-gradient(135deg, #58CC02, #3A8400)"
-                  : "#58CC02",
-                boxShadow: "0 4px 0 #3A8400, 0 8px 16px -4px rgba(0,0,0,0.1)",
-                color: "#fff",
-              }}
-            >
-              <div className="flex items-center gap-4">
-                <motion.span
-                  animate={justArrivedTeamIds.length > 0 ? { scale: [1, 1.2, 1] } : {}}
-                  transition={{ repeat: Infinity, duration: 1.5 }}
-                  className="text-4xl"
-                >
-                  {justArrivedTeamIds.length > 0 ? "🚨" : "⚡"}
-                </motion.span>
-                <div>
-                  <h3 className="text-[18px] font-black uppercase tracking-wide">
-                    {justArrivedTeamIds.length > 0 ? "New Team Arrived!" : "Team Incoming!"}
-                  </h3>
-                  <p className="text-[14px] font-bold opacity-90">
-                    {nearbyTeamIds.length} {nearbyTeamIds.length === 1 ? "team is" : "teams are"} within{" "}
-                    {data?.spot?.radius_meters ?? 100}m of your spot.
-                    {justArrivedTeamIds.length > 0 && (
-                      <span className="block mt-1 text-[13px] font-black uppercase tracking-wide">
-                        🔔 {justArrivedTeamIds.length} just arrived!
-                      </span>
-                    )}
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+
 
         {error && (
           <motion.div
@@ -260,13 +197,13 @@ export default function SpotLeaderPage() {
 
         <Reveal delay={0.08} duration={0.55}>
           <div className="rounded-[24px] p-6 sm:p-8 mb-8"
-            style={{ background: "#FFFFFF", boxShadow: "0 4px 0 #1CB0F6, 0 12px 24px -8px rgba(0,0,0,0.06)" }}>
+            style={{ background: "var(--surface)", boxShadow: "0 4px 0 #1CB0F6, 0 12px 24px -8px var(--border-soft)" }}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <p className="text-[12px] sm:text-[14px] font-black uppercase tracking-[0.18em]" style={{ color: "#777777" }}>
+                <p className="text-[12px] sm:text-[14px] font-black uppercase tracking-[0.18em]" style={{ color: "var(--fg-muted)" }}>
                   🏠 Your Spot
                 </p>
-                <p className="mt-2 text-[16px] sm:text-[19px] font-black leading-relaxed" style={{ color: "#2B2B2B" }}>
+                <p className="mt-2 text-[16px] sm:text-[19px] font-black leading-relaxed" style={{ color: "var(--fg)" }}>
                   {data?.spot.description ?? "Loading…"}
                 </p>
               </div>
@@ -274,7 +211,7 @@ export default function SpotLeaderPage() {
                 onClick={load}
                 disabled={loading}
                 className="w-full sm:w-auto rounded-[20px] px-6 sm:px-8 py-3 sm:py-4 text-[14px] sm:text-[15px] font-black uppercase tracking-wide transition-all"
-                style={{ background: "#F0F0F0", boxShadow: "0 3px 0 rgba(0,0,0,0.08)", color: "#777777" }}
+                style={{ background: "var(--accent-on-surface)", boxShadow: "0 3px 0 var(--border-soft)", color: "var(--fg-muted)" }}
               >
                 {loading ? "⟳" : "🔄 Refresh"}
               </button>
@@ -282,27 +219,7 @@ export default function SpotLeaderPage() {
           </div>
         </Reveal>
 
-        {/* Spot Map & Team Locations */}
-        <Reveal delay={0.1} duration={0.5}>
-          <div className="mb-8">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-[13px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "#777777" }}>
-                📍 {data?.spot?.name ?? "Spot"} Location
-              </p>
-              <span className="text-[12px] font-bold" style={{ color: "#777777" }}>
-                🟢 {mapTeams.filter(t => t.isActive && !t.isDisqualified).length} assigned teams active
-                {data?.spot?.latitude && (
-                  <span className="ml-3">
-                    ⭕ {data?.spot?.radius_meters ?? 100}m radius
-                  </span>
-                )}
-              </span>
-            </div>
-            <div className="rounded-[16px] overflow-hidden" style={{ boxShadow: "0 4px 0 rgba(0,0,0,0.06), 0 12px 24px -8px rgba(0,0,0,0.08)" }}>
-              <TeamMap teams={mapTeams} spots={data?.spot ? [data.spot] : []} height="360px" />
-            </div>
-          </div>
-        </Reveal>
+
 
         {/* Mission Roadmap — All Teams */}
         <Reveal delay={0.12} duration={0.5}>
@@ -310,13 +227,13 @@ export default function SpotLeaderPage() {
             <button
               onClick={() => setShowGlobalView(!showGlobalView)}
               className="w-full rounded-[20px] p-4 text-left transition-all flex items-center justify-between gap-3"
-              style={{ background: "#FFFFFF", boxShadow: "0 3px 0 rgba(0,0,0,0.06)" }}
+              style={{ background: "var(--surface)", boxShadow: "0 3px 0 var(--border-soft)" }}
             >
               <div className="flex items-center gap-3">
                 <span className="text-2xl">🎯</span>
                 <div>
-                  <p className="text-[15px] font-black" style={{ color: "#2B2B2B" }}>Mission Roadmap — All Teams</p>
-                  <p className="text-[11px] font-extrabold uppercase tracking-wide" style={{ color: "#999" }}>
+                  <p className="text-[15px] font-black" style={{ color: "var(--fg)" }}>Mission Roadmap — All Teams</p>
+                  <p className="text-[11px] font-extrabold uppercase tracking-wide" style={{ color: "var(--fg-muted)" }}>
                     {data?.allTeams.filter(t => t.fullRoute && t.fullRoute.length > 0).length ?? 0} Teams · Route Progress
                   </p>
                 </div>
@@ -324,7 +241,7 @@ export default function SpotLeaderPage() {
               <motion.span
                 animate={{ rotate: showGlobalView ? 180 : 0 }}
                 className="text-xl opacity-40"
-                style={{ color: "#777" }}
+                style={{ color: "var(--fg-muted)" }}
               >
                 ▼
               </motion.span>
@@ -342,8 +259,8 @@ export default function SpotLeaderPage() {
                   <div className="flex flex-col gap-4 pt-4">
                     {data.allTeams.filter(t => t.fullRoute && t.fullRoute.length > 0).map((team, tIdx) => {
                       const route = team.fullRoute;
-                      const completed = route.filter(s => ["completed","revealed","solved"].includes(s.status || "")).length;
-                      const leaderAvatar = team.participants?.find(p => p.isLeader)?.avatarEmoji || team.participants?.[0]?.avatarEmoji || team.teamName;
+                      const completed = route.filter((s: any) => ["completed","revealed","solved"].includes(s.status || "")).length;
+                      const leaderAvatar = team.participants?.find((p: any) => p.isLeader)?.avatarEmoji || team.participants?.[0]?.avatarEmoji || team.teamName;
                       return (
                         <motion.div
                           key={team.teamId}
@@ -351,7 +268,7 @@ export default function SpotLeaderPage() {
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: tIdx * 0.03 }}
                           className="rounded-[20px] p-4 sm:p-5"
-                          style={{ background: "#FFFFFF", boxShadow: "0 3px 0 rgba(0,0,0,0.06)" }}
+                          style={{ background: "var(--surface)", boxShadow: "0 3px 0 var(--border-soft)" }}
                         >
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2.5 min-w-0">
@@ -359,19 +276,19 @@ export default function SpotLeaderPage() {
                                 <img src={getAvatarUrl(leaderAvatar, 36)} alt="" className="w-full h-full object-cover" />
                               </div>
                               <div className="min-w-0">
-                                <p className="text-[14px] font-black truncate" style={{ color: "#2B2B2B" }}>{team.teamName}</p>
-                                <p className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "#999" }}>
-                                  {team.totalPoints} pts{team.huntCompleted ? " · 👑 Done" : ""}
+                                <p className="text-[14px] font-black truncate" style={{ color: "var(--fg)" }}>{team.teamName}</p>
+                                <p className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: "var(--fg-muted)" }}>
+                                  {Math.max(0, team.totalPoints - secondsToPenaltyPoints(team.totalPenaltySeconds))} pts{team.huntCompleted ? " · 👑 Done" : ""}
                                 </p>
                               </div>
                             </div>
                             <div className="text-right shrink-0 ml-2">
                               <span className="text-[16px] font-black" style={{ color: "#58CC02" }}>{completed}/{route.length}</span>
-                              <p className="text-[8px] font-black uppercase tracking-tight" style={{ color: "#aaa" }}>Cleared</p>
+                              <p className="text-[8px] font-black uppercase tracking-tight" style={{ color: "var(--fg-muted)" }}>Cleared</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-0 overflow-x-auto pb-1 scrollbar-hide">
-                            {route.map((step, idx) => {
+                            {route.map((step: any, idx: number) => {
                               const isCompleted = ["completed","revealed","solved"].includes(step.status || "");
                               const isCurrent = step.isCurrent;
                               return (
@@ -379,17 +296,17 @@ export default function SpotLeaderPage() {
                                   <div className="flex flex-col items-center min-w-[72px]">
                                     <div className="w-9 h-9 rounded-xl flex items-center justify-center text-[12px] font-black border-[3px] transition-all shrink-0"
                                       style={{
-                                        background: isCompleted ? "#58CC02" : isCurrent ? "#1CB0F6" : "#F7F7F7",
+                                        background: isCompleted ? "#58CC02" : isCurrent ? "#1CB0F6" : "var(--bg)",
                                         borderColor: isCompleted ? "#46A302" : isCurrent ? "#0f7ac0" : "#E8E8E8",
-                                        color: isCompleted || isCurrent ? "white" : "#BBB",
+                                        color: isCompleted || isCurrent ? "white" : "var(--fg-muted)",
                                         boxShadow: isCurrent ? "0 0 0 5px rgba(28,176,246,0.15)" : "none",
                                       }}
                                     >
-                                      {isCompleted ? "🏆" : isCurrent ? "🎯" : "🔒"}
+                                      {isCompleted ? "🏆" : isCurrent ? "🎯" : (idx + 1)}
                                     </div>
                                     <p className="mt-1 text-[8px] font-black uppercase truncate max-w-[64px] text-center leading-tight"
-                                      style={{ color: isCompleted ? "#58CC02" : isCurrent ? "#1CB0F6" : "#BBB" }}>
-                                      {isCompleted || isCurrent ? step.spotName : "🔒"}
+                                      style={{ color: isCompleted ? "#58CC02" : isCurrent ? "#1CB0F6" : "var(--fg-muted)" }}>
+                                      {step.spotName}
                                     </p>
                                     <div className="mt-0.5 flex items-center gap-0.5">
                                       <span className="text-[7px]" style={{ opacity: step.arrivalApproved ? 1 : 0.2 }}>📍</span>
@@ -416,7 +333,7 @@ export default function SpotLeaderPage() {
                     {data.allTeams.filter(t => t.fullRoute && t.fullRoute.length > 0).length === 0 && (
                       <div className="text-center py-8">
                         <span className="text-3xl">🗺️</span>
-                        <p className="mt-2 text-[14px] font-bold" style={{ color: "#999" }}>No route plans assigned yet</p>
+                        <p className="mt-2 text-[14px] font-bold" style={{ color: "var(--fg-muted)" }}>No route plans assigned yet</p>
                       </div>
                     )}
                   </div>
@@ -436,7 +353,7 @@ export default function SpotLeaderPage() {
               >
                 🔍
               </motion.p>
-              <p className="mt-4 text-[16px] font-bold" style={{ color: "#777777" }}>
+              <p className="mt-4 text-[16px] font-bold" style={{ color: "var(--fg-muted)" }}>
                 Loading teams…
               </p>
             </div>
@@ -445,7 +362,7 @@ export default function SpotLeaderPage() {
           {data && data.arrivingTeams.length === 0 && (
             <Reveal>
               <div className="rounded-[24px] p-12 text-center"
-                style={{ background: "#FFFFFF", boxShadow: "0 4px 0 rgba(0,0,0,0.06), 0 12px 24px -8px rgba(0,0,0,0.08)" }}>
+                style={{ background: "var(--surface)", boxShadow: "0 4px 0 var(--border-soft), 0 12px 24px -8px var(--border-soft)" }}>
                 <motion.p
                   animate={{ y: [0, -6, 0] }}
                   transition={{ repeat: Infinity, duration: 2 }}
@@ -453,10 +370,10 @@ export default function SpotLeaderPage() {
                 >
                   📍
                 </motion.p>
-                <p className="mt-4 text-[22px] font-extrabold" style={{ color: "#777777" }}>
+                <p className="mt-4 text-[22px] font-extrabold" style={{ color: "var(--fg-muted)" }}>
                   No teams at this spot yet
                 </p>
-                <p className="mt-2 text-[15px] font-semibold" style={{ color: "#999999" }}>
+                <p className="mt-2 text-[15px] font-semibold" style={{ color: "var(--fg-muted)" }}>
                   Teams will appear here when they reach your clue.
                 </p>
               </div>
@@ -479,16 +396,16 @@ export default function SpotLeaderPage() {
                     style={{
                       background: successId === team.teamId
                         ? "#F0FFF0"
-                        : "#FFFFFF",
+                        : "var(--surface)",
                       boxShadow: successId === team.teamId
-                        ? "0 4px 0 #58CC02, 0 12px 24px -8px rgba(0,0,0,0.06)"
-                        : "0 4px 0 #FFC800, 0 12px 24px -8px rgba(0,0,0,0.06)",
+                        ? "0 4px 0 #58CC02, 0 12px 24px -8px var(--border-soft)"
+                        : "0 4px 0 #FFC800, 0 12px 24px -8px var(--border-soft)",
                     }}
                   >
                     <div className="flex flex-col sm:flex-row items-start justify-between gap-6">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                          <span className="text-[20px] sm:text-[26px] font-black truncate max-w-[200px] sm:max-w-none" style={{ color: "#2B2B2B" }}>
+                          <span className="text-[20px] sm:text-[26px] font-black truncate max-w-[200px] sm:max-w-none" style={{ color: "var(--fg)" }}>
                             {team.teamName}
                           </span>
                           <div className="flex flex-wrap items-center gap-2">
@@ -507,40 +424,35 @@ export default function SpotLeaderPage() {
                             >
                               {team.status === "active" ? "🟢 Active" : "🟡 Pending"}
                             </span>
-                            {(() => {
-                              const loc = teamLocations.find(t => t.id === team.teamId);
-                              return loc ? (
-                                <span
-                                  className="rounded-xl px-2 sm:px-3 py-1 text-[9px] sm:text-[11px] font-extrabold uppercase tracking-wide"
-                                  style={{
-                                    background: loc.isActive ? "rgba(88,204,2,0.1)" : "rgba(156,163,175,0.1)",
-                                    color: loc.isActive ? "#58CC02" : "#777777",
-                                  }}
-                                >
-                                  {loc.isActive ? "🟢 Live" : "⚪ Offline"}
-                                </span>
-                              ) : null;
-                            })()}
+                            <span
+                              className="rounded-xl px-2 sm:px-3 py-1 text-[9px] sm:text-[11px] font-extrabold uppercase tracking-wide"
+                              style={{
+                                background: team.status === "active" ? "rgba(88,204,2,0.1)" : "rgba(156,163,175,0.1)",
+                                color: team.status === "active" ? "#58CC02" : "var(--fg-muted)",
+                              }}
+                            >
+                              {team.status === "active" ? "🟢 Hunting" : "⏳ Waiting"}
+                            </span>
                           </div>
                         </div>
 
-                        <p className="mt-3 text-[14px] sm:text-[15px] font-semibold leading-relaxed" style={{ color: "#777777" }}>
+                        <p className="mt-3 text-[14px] sm:text-[15px] font-semibold leading-relaxed" style={{ color: "var(--fg-muted)" }}>
                           {team.clueText.length > 120
                             ? team.clueText.slice(0, 120) + "…"
                             : team.clueText}
                         </p>
 
-                        <p className="mt-3 flex items-center gap-2 text-[12px] sm:text-[13px] font-extrabold" style={{ color: "#999999" }}>
+                        <p className="mt-3 flex items-center gap-2 text-[12px] sm:text-[13px] font-extrabold" style={{ color: "var(--fg-muted)" }}>
                           ⏱ Hunting for {team.timeElapsedMinutes}m
                         </p>
 
                         {team.fullRoute && team.fullRoute.length > 0 && (
-                          <div className="mt-6 pt-6 border-t-[3px] border-dashed" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
-                            <p className="mb-4 text-[12px] sm:text-[13px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "#777777" }}>
+                          <div className="mt-6 pt-6 border-t-[3px] border-dashed" style={{ borderColor: "var(--border-soft)" }}>
+                            <p className="mb-4 text-[12px] sm:text-[13px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--fg-muted)" }}>
                               🗺 Route Journey
                             </p>
                             <div className="flex flex-wrap items-center gap-2">
-                              {team.fullRoute.map((step, idx) => (
+                              {team.fullRoute.map((step: any, idx: number) => (
                                 <div key={idx} className="flex items-center gap-1.5">
                                   <span 
                                     className="rounded-full px-2.5 py-1.5 text-[10px] sm:text-[12px] font-black uppercase tracking-wide"
@@ -549,15 +461,15 @@ export default function SpotLeaderPage() {
                                         ? "#1CB0F6"
                                         : step.status === "completed" || step.status === "solved" 
                                           ? "#58CC02"
-                                          : "#F0F0F0",
-                                      color: step.isCurrent || step.status === "completed" || step.status === "solved" ? "#fff" : "#777777",
+                                          : "var(--accent-on-surface)",
+                                      color: step.isCurrent || step.status === "completed" || step.status === "solved" ? "#fff" : "var(--fg-muted)",
                                       opacity: step.status === "pending" && !step.isCurrent ? 0.6 : 1,
                                     }}
                                   >
-                                    {step.isCurrent ? "📍" : step.status === "completed" || step.status === "solved" ? "✓" : "⏳"} {step.spotName}
+                                    {step.isCurrent ? "📍" : step.status === "completed" || step.status === "solved" ? "✓" : (idx + 1)} {step.spotName}
                                   </span>
                                   {idx < team.fullRoute.length - 1 && (
-                                    <span className="opacity-30 font-bold text-xs" style={{ color: "#777777" }}>→</span>
+                                    <span className="opacity-30 font-bold text-xs" style={{ color: "var(--fg-muted)" }}>→</span>
                                   )}
                                 </div>
                               ))}
@@ -598,7 +510,7 @@ export default function SpotLeaderPage() {
 
 
         <Reveal delay={0.2} duration={0.5}>
-          <p className="mt-12 text-center text-[13px] font-semibold" style={{ color: "#BBBBBB" }}>
+          <p className="mt-12 text-center text-[13px] font-semibold" style={{ color: "var(--fg-muted)" }}>
             Treasure Hunt · University of Dhaka — CSE
           </p>
         </Reveal>
@@ -619,7 +531,7 @@ export default function SpotLeaderPage() {
               exit={{ opacity: 0, scale: 0.85, y: 30 }}
               transition={{ type: "spring", stiffness: 250, damping: 22 }}
               className="w-full max-w-md rounded-[24px] p-6 sm:p-8"
-              style={{ background: "#FFFFFF", boxShadow: "0 4px 0 rgba(0,0,0,0.08), 0 16px 32px -8px rgba(0,0,0,0.12)" }}
+              style={{ background: "var(--surface)", boxShadow: "0 4px 0 var(--border-soft), 0 16px 32px -8px var(--border-strong)" }}
             >
               <motion.p
                 initial={{ rotate: -10, scale: 0 }}
@@ -634,7 +546,7 @@ export default function SpotLeaderPage() {
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.1 }}
                 className="mb-1 text-center text-[22px] sm:text-[26px] font-extrabold"
-                style={{ color: "#2B2B2B" }}
+                style={{ color: "var(--fg)" }}
               >
                 {miniGameTeam.teamName}
               </motion.h2>
@@ -643,7 +555,7 @@ export default function SpotLeaderPage() {
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.15 }}
                 className="mb-6 sm:mb-8 text-center text-[14px] sm:text-[15px] font-semibold"
-                style={{ color: "#777777" }}
+                style={{ color: "var(--fg-muted)" }}
               >
                 Approve team &amp; award points
               </motion.p>
@@ -657,7 +569,7 @@ export default function SpotLeaderPage() {
                 <p className="mb-3 text-[12px] sm:text-[14px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "#FFC800" }}>
                   🎯 Play Mini-Game
                 </p>
-                <p className="mb-4 text-[13px] sm:text-[14px] font-semibold" style={{ color: "#777777" }}>
+                <p className="mb-4 text-[13px] sm:text-[14px] font-semibold" style={{ color: "var(--fg-muted)" }}>
                   Select bonus points (on top of +100):
                 </p>
                 <div className="mb-6 flex flex-wrap justify-center sm:justify-start gap-2">
@@ -668,9 +580,9 @@ export default function SpotLeaderPage() {
                       onClick={() => setSelectedPoints(p)}
                       className="rounded-2xl px-4 sm:px-5 py-2.5 sm:py-3 text-[14px] sm:text-[16px] font-extrabold transition-all"
                       style={{
-                        background: selectedPoints === p ? "#FFC800" : "#F0F0F0",
-                        color: selectedPoints === p ? "#2B2B2B" : "#777777",
-                        boxShadow: selectedPoints === p ? "0 3px 0 rgba(200,150,0,0.5)" : "0 2px 0 rgba(0,0,0,0.06)",
+                        background: selectedPoints === p ? "#FFC800" : "var(--accent-on-surface)",
+                        color: selectedPoints === p ? "var(--fg)" : "var(--fg-muted)",
+                        boxShadow: selectedPoints === p ? "0 3px 0 rgba(200,150,0,0.5)" : "0 2px 0 var(--border-soft)",
                         transform: selectedPoints === p ? "scale(1.05)" : "scale(1)",
                       }}
                     >
@@ -694,7 +606,7 @@ export default function SpotLeaderPage() {
                     whileTap={{ scale: 0.9 }}
                     onClick={() => setPenaltyMinutes(Math.max(0, penaltyMinutes - 1))}
                     className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl text-[18px] sm:text-[22px] font-extrabold"
-                    style={{ background: "#F0F0F0", color: "#2B2B2B" }}
+                    style={{ background: "var(--accent-on-surface)", color: "var(--fg)" }}
                   >
                     −
                   </motion.button>
@@ -705,7 +617,7 @@ export default function SpotLeaderPage() {
                     whileTap={{ scale: 0.9 }}
                     onClick={() => setPenaltyMinutes(penaltyMinutes + 1)}
                     className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl text-[18px] sm:text-[22px] font-extrabold"
-                    style={{ background: "#F0F0F0", color: "#2B2B2B" }}
+                    style={{ background: "var(--accent-on-surface)", color: "var(--fg)" }}
                   >
                     +
                   </motion.button>
@@ -713,7 +625,7 @@ export default function SpotLeaderPage() {
                     <button
                       onClick={() => setPenaltyMinutes(0)}
                       className="rounded-2xl px-3 py-1.5 text-[11px] sm:text-[12px] font-extrabold uppercase tracking-wide"
-                      style={{ color: "#777777" }}
+                      style={{ color: "var(--fg-muted)" }}
                     >
                       ✕ Clear
                     </button>
@@ -763,9 +675,9 @@ export default function SpotLeaderPage() {
                   disabled={dialogBusy}
                   className="w-full rounded-2xl px-8 py-3.5 sm:py-4 text-[14px] sm:text-[15px] font-extrabold uppercase tracking-wide transition-all"
                   style={{
-                    background: "#F0F0F0",
-                    boxShadow: "0 3px 0 rgba(0,0,0,0.06)",
-                    color: "#777777",
+                    background: "var(--accent-on-surface)",
+                    boxShadow: "0 3px 0 var(--border-soft)",
+                    color: "var(--fg-muted)",
                     opacity: dialogBusy ? 0.4 : 1,
                     cursor: dialogBusy ? "not-allowed" : "pointer",
                   }}

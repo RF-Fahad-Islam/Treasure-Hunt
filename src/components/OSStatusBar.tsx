@@ -8,12 +8,12 @@ interface Props {
   teamName: string;
   teamSeed: string;
   teamMembers: Participant[];
-  hasGps: boolean;
+  hasGps?: boolean;
   onTeamNameEdit: () => void;
   onTeamAvatarEdit: () => void;
 }
 
-export function OSStatusBar({ teamName, teamSeed, teamMembers, hasGps, onTeamNameEdit, onTeamAvatarEdit }: Props) {
+export function OSStatusBar({ teamName, teamSeed, teamMembers, hasGps = false, onTeamNameEdit, onTeamAvatarEdit }: Props) {
   const [time, setTime] = useState(new Date());
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -38,16 +38,16 @@ export function OSStatusBar({ teamName, teamSeed, teamMembers, hasGps, onTeamNam
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 backdrop-blur-xl border-b"
-      style={{ paddingTop: "calc(0.625rem + env(safe-area-inset-top, 0px))", paddingBottom: "0.625rem", background: "rgba(255,255,255,0.92)", borderColor: "rgba(0,0,0,0.06)" }}>
+      style={{ paddingTop: "calc(0.625rem + env(safe-area-inset-top, 0px))", paddingBottom: "0.625rem", background: "var(--surface)", borderColor: "var(--border-soft)" }}>
       {/* Left: Clock */}
       <div className="flex items-center gap-2">
         <span className="text-[16px] font-extrabold tabular-nums tracking-wide"
-          style={{ color: "#2B2B2B" }}>
+          style={{ color: "var(--fg)" }}>
           {time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
         </span>
       </div>
 
-      {/* Center: GPS + Notifications */}
+      {/* Center: Notifications */}
       <div className="flex items-center gap-3">
         {hasGps && (
           <span className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-bold"
@@ -62,15 +62,15 @@ export function OSStatusBar({ teamName, teamSeed, teamMembers, hasGps, onTeamNam
         <button
           onClick={() => setMenuOpen((o) => !o)}
           className="flex items-center gap-2 rounded-full px-3 py-1.5 transition-all hover:opacity-80"
-          style={{ background: "#FFFFFF", boxShadow: "0 2px 0 rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04)" }}
+          style={{ background: "var(--surface)", boxShadow: "0 2px 0 var(--border-soft), 0 4px 12px rgba(0,0,0,0.04)" }}
         >
           <img
             src={getAvatarUrl(teamSeed, 32)}
             alt={teamName}
             className="w-7 h-7 rounded-lg shrink-0"
           />
-          <span className="text-[13px] font-black max-w-[100px] truncate" style={{ color: "#2B2B2B" }}>{teamName}</span>
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ color: "#777777" }}
+          <span className="text-[13px] font-black max-w-[100px] truncate" style={{ color: "var(--fg)" }}>{teamName}</span>
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ color: "var(--fg-muted)" }}
             className={`transition-transform ${menuOpen ? "rotate-180" : ""}`}>
             <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
@@ -84,18 +84,18 @@ export function OSStatusBar({ teamName, teamSeed, teamMembers, hasGps, onTeamNam
               exit={{ opacity: 0, y: -4, scale: 0.95 }}
               transition={{ duration: 0.12 }}
               className="absolute right-0 mt-2 w-56 rounded-2xl overflow-hidden z-50"
-              style={{ background: "#FFFFFF", boxShadow: "0 4px 0 rgba(0,0,0,0.08), 0 16px 32px -8px rgba(0,0,0,0.12)", border: "1px solid rgba(0,0,0,0.06)" }}
+              style={{ background: "var(--surface)", boxShadow: "0 4px 0 var(--border-strong), 0 16px 32px -8px rgba(0,0,0,0.12)", border: "1px solid var(--border-soft)" }}
             >
-              <div className="px-4 py-3 border-b" style={{ borderColor: "rgba(0,0,0,0.06)" }}>
-                <p className="text-[13px] font-black" style={{ color: "#2B2B2B" }}>{teamName}</p>
-                <p className="text-[11px] font-semibold mt-0.5" style={{ color: "#777777" }}>{teamMembers.length} members</p>
+              <div className="px-4 py-3 border-b" style={{ borderColor: "var(--border-soft)" }}>
+                <p className="text-[13px] font-black" style={{ color: "var(--fg)" }}>{teamName}</p>
+                <p className="text-[11px] font-semibold mt-0.5" style={{ color: "var(--fg-muted)" }}>{teamMembers.length} members</p>
               </div>
               {isLeader && (
                 <>
                   <button
                     onClick={() => { setMenuOpen(false); onTeamNameEdit(); }}
                     className="w-full text-left px-4 py-3 text-[13px] font-bold transition-colors flex items-center gap-2"
-                    style={{ color: "#2B2B2B" }}
+                    style={{ color: "var(--fg)" }}
                     onMouseEnter={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.03)"}
                     onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
                   >
@@ -105,7 +105,7 @@ export function OSStatusBar({ teamName, teamSeed, teamMembers, hasGps, onTeamNam
                   <button
                     onClick={() => { setMenuOpen(false); onTeamAvatarEdit(); }}
                     className="w-full text-left px-4 py-3 text-[13px] font-bold transition-colors flex items-center gap-2"
-                    style={{ color: "#2B2B2B" }}
+                    style={{ color: "var(--fg)" }}
                     onMouseEnter={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.03)"}
                     onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
                   >

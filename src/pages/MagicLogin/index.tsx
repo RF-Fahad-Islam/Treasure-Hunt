@@ -2,24 +2,14 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { Backdrop } from "@/components/Backdrop";
-import { consumeLoginToken, loginByRoll, loginSpotLeader } from "@/services/auth";
+import { consumeLoginToken, loginByRoll, loginSpotLeader, loginTeamById } from "@/services/auth";
 import { insforge } from "@/lib/insforge";
 import { useAuthStore } from "@/store/authStore";
 
 type Status = "loading" | "invalid" | "expired" | "success" | "error";
 
 async function loginByTeamId(teamId: string, teamCode: string) {
-  const { data: participants, error } = await insforge.database
-    .from("participants")
-    .select("id, name, roll, is_leader")
-    .eq("team_id", teamId)
-    .order("is_leader", { ascending: false });
-
-  if (error || !participants || participants.length === 0)
-    throw new Error("Team not found");
-
-  const leader = participants.find((p: any) => p.is_leader) ?? participants[0] as any;
-  return loginByRoll(leader.roll ?? "", teamCode);
+  return loginTeamById(teamId, teamCode);
 }
 
 export default function MagicLoginPage() {
@@ -40,7 +30,7 @@ export default function MagicLoginPage() {
       .then(async (result) => {
         if (!result) {
           setStatus("invalid");
-          setMsg("This link is invalid, expired, or already used.");
+          setMsg("This link is invalid or expired.");
           return;
         }
 

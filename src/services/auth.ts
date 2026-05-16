@@ -119,6 +119,7 @@ export async function loginFromRegistration(registrationId: string): Promise<Tea
     .single();
 
   if (error || !reg) throw new Error("Registration not found");
+  if (!reg.approved) throw new Error("Your registration has not been approved yet. Please wait for the organizer to approve it.");
 
   const { data: existing } = await insforge.database
     .from("participants")
@@ -532,6 +533,50 @@ export async function adminDeactivateSession(sessionId: string): Promise<void> {
     .eq("id", sessionId);
 }
 
+/* ─── Login by team ID (magic link, bypasses roll lookup) ───── */
+
+export async function loginTeamById(
+  teamId: string,
+  teamCode: string,
+): Promise<TeamSession> {
+  const { data: teamRows, error: teamErr } = await insforge.database
+    .from("teams")
+    .select("id, name, team_code")
+    .eq("id", teamId)
+    .limit(1);
+
+  if (teamErr || !teamRows || teamRows.length === 0)
+    throw new Error("Team not found.");
+
+  const team = teamRows[0] as { id: string; name: string; team_code: string };
+
+  const { data: participants, error: partErr } = await insforge.database
+    .from("participants")
+    .select("id, name, roll, avatar_emoji, is_leader")
+    .eq("team_id", teamId)
+    .order("is_leader", { ascending: false });
+
+  if (partErr || !participants || participants.length === 0)
+    throw new Error("No participants found for this team.");
+
+  const leader = participants[0] as { id: string; name: string; roll: string; avatar_emoji: string | null; is_leader: boolean };
+  const sessionToken = generateToken();
+  await createSession(leader.id, "team", sessionToken);
+
+  return {
+    role: "team",
+    teamId: team.id,
+    teamName: team.name,
+    teamCode: team.team_code,
+    participantName: leader.name,
+    participantRoll: leader.roll ?? "",
+    participantId: leader.id,
+    isLeader: leader.is_leader === true,
+    avatarSeed: leader.avatar_emoji ?? null,
+    sessionToken,
+  };
+}
+
 /* ─── Magic Login Tokens ───────────────────────────────────────── */
 
 export async function generateLoginToken(
@@ -577,13 +622,7 @@ export async function consumeLoginToken(token: string): Promise<{
     expires_at: string;
   };
 
-  if (row.used) return null;
   if (new Date(row.expires_at).getTime() < Date.now()) return null;
-
-  await insforge.database
-    .from("login_tokens")
-    .update({ used: true })
-    .eq("id", row.id);
 
   return {
     targetRole: row.target_role as "team" | "spot-leader",

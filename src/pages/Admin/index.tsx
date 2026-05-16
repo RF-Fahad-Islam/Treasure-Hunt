@@ -31,6 +31,7 @@ import {
   createClue,
   deleteClue,
   updateEventConfig,
+  updateTeam,
   resetTeam,
   resetAllHuntData,
   fetchTeamRoutes,
@@ -42,22 +43,18 @@ import type { Participant, Spot, ClueDefinition, EventConfig, Team, Registration
 import type { GeneratedTeam, TeamWithRoute } from "@/services/admin";
 
 import { insforge } from "@/lib/insforge";
-import { TeamMap } from "@/components/TeamMap";
-import { SpotMapPicker } from "@/components/SpotMapPicker";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { useTeamLocationsRealtime } from "@/hooks/useTeamLocationsRealtime";
-import { disqualifyTeam, reinstateTeam, isActive } from "@/services/location";
 import { uploadClueImage } from "@/lib/storage";
 import {
   LayoutDashboard, Users, Building2, MapPin, Search,
   Settings, LogIn, Radio, ClipboardList, Link2, Globe,
-  Crown, RefreshCw, Trash2, Route,
+  Crown, RefreshCw, Trash2, Route, Copy
 } from "lucide-react";
 import { LiveFlowTracking } from "@/components/LiveFlowTracking";
 import { fetchAllDetailedTeams, type DetailedTeam } from "@/services/flow";
 import { broadcastMessage } from "@/services/spotLeader";
 
-type Tab = "dashboard" | "participants" | "teams" | "routes" | "spots" | "clues" | "config" | "sessions" | "broadcast" | "locations" | "registrations" | "login-links";
+type Tab = "dashboard" | "participants" | "teams" | "routes" | "spots" | "clues" | "config" | "sessions" | "broadcast" | "registrations" | "login-links";
 
 const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -71,7 +68,6 @@ const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: "broadcast", label: "Broadcast", icon: Radio },
   { key: "registrations", label: "Registrations", icon: ClipboardList },
   { key: "login-links", label: "Login Links", icon: Link2 },
-  { key: "locations", label: "Locations", icon: Globe },
 ];
 
 
@@ -167,15 +163,14 @@ export default function AdminPage() {
   const [, setTeamRoutesData] = useState<TeamRoute[]>([]);
   const [detailedTeams, setDetailedTeams] = useState<DetailedTeam[]>([]);
   const [broadcasts, setBroadcasts] = useState<any[]>([]);
-  const teamLocations = useTeamLocationsRealtime();
 
   /* ─── Login Links state ─── */
-  const [teamLinksData, setTeamLinksData] = useState<{ teamId: string; teamName: string; teamCode: string }[]>([]);
   const [teamLinks, setTeamLinks] = useState<Record<string, string>>({});
   const [linkLoading, setLinkLoading] = useState(false);
   const [linkCopiedId, setLinkCopiedId] = useState<string | null>(null);
   const [spotLinks, setSpotLinks] = useState<{ id: string; name: string; url: string }[]>([]);
   const [spotLinkLoading, setSpotLinkLoading] = useState<string | null>(null);
+  const [generatingTeamId, setGeneratingTeamId] = useState<string | null>(null);
 
   /* ─── UI ─── */
   const [loading, setLoading] = useState(false);
@@ -207,7 +202,13 @@ export default function AdminPage() {
         setSpotLinks(sR.value.filter((sp: any) => sp.login_link_url).map((sp: any) => ({ id: sp.id, name: sp.name, url: sp.login_link_url })));
       }
       if (cR.status === "fulfilled") setClues(cR.value);
-      if (tR.status === "fulfilled") setTeams(tR.value);
+      if (tR.status === "fulfilled") {
+        setTeams(tR.value);
+        // Sync team links from persistent storage
+        const links: Record<string, string> = {};
+        tR.value.forEach(t => { if (t.login_link_url) links[t.id] = t.login_link_url; });
+        setTeamLinks(links);
+      }
       if (eR.status === "fulfilled") setEventConfig(eR.value);
       if (rR.status === "fulfilled") setRegistrations(rR.value);
     } catch (err) {
@@ -230,36 +231,10 @@ export default function AdminPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Background polling + Real-time for live updates
+  // Background polling every 15 s
   useEffect(() => {
-    let cancelled = false;
-    
-    async function setupRealtime() {
-      try {
-        await insforge.realtime.connect();
-        const sub = await insforge.realtime.subscribe("admin-progress");
-        if (!cancelled && sub.ok) {
-           // Standard database update events
-           insforge.realtime.on("teams_update", () => loadData());
-           insforge.realtime.on("team_routes_update", () => loadData());
-           // Custom event from spot leader approvals
-           insforge.realtime.on("progress_updated", () => loadData());
-        }
-      } catch (err) {
-        console.error("Admin realtime failed:", err);
-      }
-    }
-
-    setupRealtime();
-    const timer = setInterval(() => { void loadData(); }, 15000); // 15s fallback
-    
-    return () => {
-      cancelled = true;
-      insforge.realtime.off("teams_update", loadData);
-      insforge.realtime.off("team_routes_update", loadData);
-      insforge.realtime.off("progress_updated", loadData);
-      clearInterval(timer);
-    };
+    const timer = setInterval(() => { void loadData(); }, 15_000);
+    return () => clearInterval(timer);
   }, [loadData]);
 
   /* ─── Helpers ─── */
@@ -268,9 +243,14 @@ export default function AdminPage() {
 
   /* ─── Derived chart data ──────────────────────────────────── */
   const teamScoreData = teams
-    .filter((t) => (t.total_points ?? 0) > 0)
-    .sort((a, b) => (b.total_points ?? 0) - (a.total_points ?? 0))
-    .map((t) => ({ label: t.name, value: t.total_points ?? 0 }));
+    .map(t => {
+      const penaltyPoints = Math.floor((t.total_penalty_seconds ?? 0) / 240);
+      const calculatedScore = Math.max(0, (t.total_points ?? 0) - penaltyPoints);
+      return { ...t, calculatedScore };
+    })
+    .filter((t) => t.calculatedScore > 0)
+    .sort((a, b) => b.calculatedScore - a.calculatedScore)
+    .map((t) => ({ label: t.name, value: t.calculatedScore }));
   const participantDistData = [
     {
       label: "Assigned",
@@ -400,19 +380,6 @@ export default function AdminPage() {
           />
         </div>
 
-        {teamLocations.length > 0 && (
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-[13px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--fg-muted)" }}>
-                🗺 Team Locations
-              </p>
-              <span className="text-[12px] font-bold" style={{ color: "#22c55e" }}>
-                🟢 {teamLocations.filter(t => t.isActive && !t.isDisqualified).length} active
-              </span>
-            </div>
-            <TeamMap teams={teamLocations} height="240px" />
-          </div>
-        )}
       </div>
     );
   }
@@ -577,76 +544,100 @@ export default function AdminPage() {
 
   function renderTeamList() {
     return (
-      <div className="flex flex-col gap-4">
-        {teams.length === 0 && <p className="py-8 text-center text-[15px] font-semibold" style={{ color: "var(--fg-muted)" }}>No teams yet. Go to the Teams tab to generate them.</p>}
-        {teams.map((t) => {
-          const loc = teamLocations.find(l => l.id === t.id);
-          const active = t.is_disqualified ? false : loc?.isActive ?? isActive(t.last_active_at);
-          return (
-          <div key={t.id} className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-3xl p-5 transition-all hover:scale-[1.01]" style={{ background: "var(--surface)", border: "4px solid var(--border-soft)" }}>
-            <div className="flex flex-1 items-center justify-between sm:justify-start gap-4">
-              <div className="flex flex-col min-w-0">
-                <span className="font-display text-[18px] sm:text-[20px] font-black truncate" style={{ color: t.is_disqualified ? "var(--fg-muted)" : "var(--fg)" }}>{t.name}</span>
-                <div className="mt-1 flex items-center gap-2">
-                  <span className={`rounded-xl px-3 py-1 text-[11px] font-black uppercase tracking-wider ${t.is_disqualified ? "opacity-50" : ""}`} style={{ background: "rgba(88,204,2,0.12)", color: "var(--color-brand-green)" }}>🏷 {t.team_code}</span>
-                  {t.is_disqualified ? (
-                    <span className="rounded-xl px-3 py-1 text-[11px] font-black uppercase tracking-wider" style={{ background: "rgba(255,75,75,0.12)", color: "var(--color-brand-red)" }}>🚫 DQ</span>
-                  ) : (
-                    <span className="rounded-xl px-3 py-1 text-[11px] font-black uppercase tracking-wider" style={{ background: active ? "rgba(88,204,2,0.12)" : "rgba(156,163,175,0.12)", color: active ? "var(--color-brand-green)" : "var(--fg-muted)" }}>
-                      {active ? "🟢 ONLINE" : "⚪ OFFLINE"}
-                    </span>
-                  )}
+        <div className="grid gap-6">
+          {teams.length === 0 && <p className="py-8 text-center text-[15px] font-semibold" style={{ color: "var(--fg-muted)" }}>No teams yet. Go to the Teams tab to generate them.</p>}
+          {teams.map((t) => {
+            const isActive = (lastActive: string | null) => {
+              if (!lastActive) return false;
+              return (Date.now() - new Date(lastActive).getTime()) < 60000;
+            };
+            const active = t.is_disqualified ? false : isActive(t.last_active_at);
+            const teamMembers = participants.filter(p => p.team_id === t.id);
+            
+            return (
+            <div key={t.id} className="flex flex-col gap-6 rounded-3xl p-6 transition-all border-4" style={{ background: "var(--surface)", borderColor: "var(--border-soft)" }}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-white text-[20px] shadow-sm shrink-0" style={{ background: t.hunt_completed ? "linear-gradient(135deg, #FFC800, #F59E0B)" : "linear-gradient(135deg, #1CB0F6, #0077CC)" }}>
+                    {t.name.charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <span className="font-display text-[20px] font-black truncate block" style={{ color: t.is_disqualified ? "var(--fg-muted)" : "var(--fg)" }}>{t.name}</span>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <span className={`rounded-xl px-3 py-1 text-[11px] font-black uppercase tracking-wider ${t.is_disqualified ? "opacity-50" : ""}`} style={{ background: "rgba(88,204,2,0.12)", color: "var(--color-brand-green)" }}>🏷 {t.team_code}</span>
+                        <button onClick={() => copyToClipboard(t.team_code, t.id + '-code')} className="p-1.5 rounded-lg hover:bg-black/5 transition-colors" title="Copy Team Code">
+                          <Copy size={14} className={linkCopiedId === t.id + '-code' ? "text-green-500" : "text-gray-400"} />
+                        </button>
+                      </div>
+                      {t.is_disqualified ? (
+                        <span className="rounded-xl px-3 py-1 text-[11px] font-black uppercase tracking-wider" style={{ background: "rgba(255,75,75,0.12)", color: "var(--color-brand-red)" }}>🚫 DQ</span>
+                      ) : (
+                        <span className="rounded-xl px-3 py-1 text-[11px] font-black uppercase tracking-wider" style={{ background: active ? "rgba(88,204,2,0.12)" : "rgba(156,163,175,0.12)", color: active ? "var(--color-brand-green)" : "var(--fg-muted)" }}>
+                          {active ? "🟢 ONLINE" : "⚪ OFFLINE"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-6">
+                  <div className="flex gap-5">
+                    <div className="flex flex-col items-end sm:items-start">
+                      <span className="text-[10px] font-black uppercase tracking-tighter opacity-40" style={{ color: "var(--fg-muted)" }}>STATUS</span>
+                      <span className="text-[14px] font-black" style={{ color: "var(--fg)" }}>{t.hunt_completed ? "🏆 DONE" : `🎯 CLUE ${(t.current_clue_index ?? 0) + 1}`}</span>
+                    </div>
+                    <div className="flex flex-col items-end sm:items-start">
+                      <span className="text-[10px] font-black uppercase tracking-tighter opacity-40" style={{ color: "var(--fg-muted)" }}>NET POINTS</span>
+                      <span className="text-[14px] font-black" style={{ color: "var(--fg)" }}>
+                        {Math.max(0, (t.total_points ?? 0) - Math.floor((t.total_penalty_seconds ?? 0) / 240))} 
+                        <span className="text-[11px] opacity-50 font-bold ml-1">PTS</span>
+                      </span>
+                    </div>
+                    <div className="flex flex-col items-end sm:items-start">
+                      <span className="text-[10px] font-black uppercase tracking-tighter opacity-40" style={{ color: "var(--fg-muted)" }}>PENALTY</span>
+                      <span className="text-[14px] font-black text-[#FF4B4B]">
+                        -{Math.floor((t.total_penalty_seconds ?? 0) / 240)} 
+                        <span className="text-[11px] opacity-50 font-bold ml-1">PTS</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button onClick={() => {
+                      setConfirmDef({ title: "Reset Team", message: `Reset ${t.name}? All progress, points, and penalties will be cleared.`, destructive: true });
+                      setConfirmHandler(() => async () => {
+                        try { await resetTeam(t.id); flash(`🔄 ${t.name} reset`); await loadData(); } catch { flashError("Reset failed"); }
+                      });
+                    }} className="btn-press flex h-10 w-10 items-center justify-center rounded-xl transition-all" style={{ background: "rgba(255,200,0,0.1)", color: "var(--color-brand-gold)" }}>
+                      <RefreshCw size={18} />
+                    </button>
+                    
+                  </div>
+                </div>
+              </div>
+
+              {/* Members Section - Always expanded as per request */}
+              <div className="pt-4 border-t-2" style={{ borderColor: "var(--border-soft)" }}>
+                <p className="text-[11px] font-black uppercase tracking-widest mb-3 opacity-40">Team Members</p>
+                <div className="flex flex-wrap gap-3">
+                  {teamMembers.map(m => (
+                    <div key={m.id} className="flex items-center gap-2 rounded-2xl px-4 py-2 shadow-sm border-2" style={{ background: "var(--surface)", borderColor: "var(--border-soft)" }}>
+                      <span className="text-[18px]">{m.avatar_emoji || "👤"}</span>
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-black truncate leading-none" style={{ color: "var(--fg)" }}>{m.name}</p>
+                        <p className="text-[10px] font-bold opacity-50 uppercase mt-0.5">{m.is_leader ? "👑 Leader" : `Roll ${m.roll || '—'}`}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {teamMembers.length === 0 && <p className="text-[12px] italic opacity-50">No members assigned.</p>}
                 </div>
               </div>
             </div>
+            );
+          })}
+        </div>
 
-            <div className="flex items-center justify-between sm:justify-end gap-6 pt-4 sm:pt-0 border-t sm:border-0" style={{ borderColor: "var(--border-soft)" }}>
-              <div className="flex gap-5">
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-black uppercase tracking-tighter opacity-40" style={{ color: "var(--fg-muted)" }}>HUNT STATUS</span>
-                  <span className="text-[14px] font-black" style={{ color: "var(--fg)" }}>⚡ {t.hunt_completed ? "✅ DONE" : `CLUE ${(t.current_clue_index ?? 0) + 1}`}</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-black uppercase tracking-tighter opacity-40" style={{ color: "var(--fg-muted)" }}>POINTS</span>
-                  <span className="text-[14px] font-black" style={{ color: "var(--fg)" }}>{t.total_points ?? 0} <span className="text-[11px] opacity-50 font-bold">PTS</span></span>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <button onClick={() => {
-                  setConfirmDef({ title: "Reset Team", message: `Reset ${t.name}? All progress, points, and penalties will be cleared.`, destructive: true });
-                  setConfirmHandler(() => async () => {
-                    try { await resetTeam(t.id); flash(`🔄 ${t.name} reset`); await loadData(); } catch { flashError("Reset failed"); }
-                  });
-                }} className="btn-press flex h-11 w-11 items-center justify-center rounded-2xl transition-all" style={{ background: "rgba(255,200,0,0.1)", color: "var(--color-brand-gold)" }}>
-                  <span className="material-symbols-outlined text-[20px] font-bold">refresh</span>
-                </button>
-                
-                {t.is_disqualified ? (
-                  <button onClick={() => {
-                    setConfirmDef({ title: "Reinstate Team", message: `Reinstate ${t.name}? They will regain access to the dashboard.` });
-                    setConfirmHandler(() => async () => {
-                      try { await reinstateTeam(t.id); flash(`✅ ${t.name} reinstated`); await loadData(); } catch { flashError("Reinstate failed"); }
-                    });
-                  }} className="btn-press flex h-11 w-11 items-center justify-center rounded-2xl transition-all" style={{ background: "rgba(88,204,2,0.1)", color: "var(--color-brand-green)" }}>
-                    <span className="material-symbols-outlined text-[20px] font-bold">check_circle</span>
-                  </button>
-                ) : (
-                  <button onClick={() => {
-                    setConfirmDef({ title: "Disqualify Team", message: `Disqualify ${t.name}? They will be blocked from the dashboard and marked on the map.`, destructive: true });
-                    setConfirmHandler(() => async () => {
-                      try { await disqualifyTeam(t.id); flash(`🚫 ${t.name} disqualified`); await loadData(); } catch { flashError("Disqualify failed"); }
-                    });
-                  }} className="btn-press flex h-11 w-11 items-center justify-center rounded-2xl transition-all" style={{ background: "rgba(255,75,75,0.1)", color: "var(--color-brand-red)" }}>
-                    <span className="material-symbols-outlined text-[20px] font-bold">block</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-          );
-        })}
-      </div>
     );
   }
 
@@ -821,110 +812,43 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* Per-Team Gamified Route Progress */}
-          <div className="mt-8 pt-6 border-t-4" style={{ borderColor: "var(--border-soft)" }}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-[16px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-green)" }}>
-                🎯 Team Route Progress
-              </h3>
-              <span className="rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-wider" style={{ background: "rgba(88,204,2,0.1)", color: "#58CC02" }}>
-                {detailedTeams.filter(t => t.fullRoute.length > 0).length} teams
-              </span>
-            </div>
-            <div className="flex flex-col gap-5">
-              {detailedTeams.filter(t => t.fullRoute.length > 0).map(team => {
-                const route = team.fullRoute;
-                const completed = route.filter(s => ["completed","revealed","solved"].includes(s.status || "")).length;
-                return (
-                  <motion.div
-                    key={team.teamId}
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="rounded-3xl p-5 border-4 transition-all hover:shadow-md"
-                    style={{ borderColor: "var(--border-soft)", background: "var(--surface)" }}
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-[16px] shadow-sm shrink-0" style={{ background: team.huntCompleted ? "linear-gradient(135deg, #FFC800, #F59E0B)" : "linear-gradient(135deg, #58CC02, #3A8400)" }}>
-                          {team.teamName.charAt(0)}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[15px] font-black truncate" style={{ color: "var(--fg)" }}>{team.teamName}</p>
-                          <p className="text-[11px] font-extrabold uppercase tracking-wider" style={{ color: "var(--fg-muted)" }}>
-                            #{team.teamCode} · {team.totalPoints} pts{team.huntCompleted ? " · 👑 Complete" : ""}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0 ml-3">
-                        <span className="text-[18px] font-black" style={{ color: "var(--color-brand-green)" }}>{completed}/{route.length}</span>
-                        <p className="text-[9px] font-black uppercase tracking-tight" style={{ color: "var(--fg-muted)" }}>Spots Cleared</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-0 overflow-x-auto pb-1 scrollbar-hide">
-                      {route.map((step, idx) => {
-                        const isCompleted = ["completed","revealed","solved"].includes(step.status || "");
-                        const isCurrent = step.isCurrent;
-                        const stepLabel = isCompleted ? "🏆" : isCurrent ? "🎯" : "🔒";
-                        const stepColor = isCompleted ? "#58CC02" : isCurrent ? "#1CB0F6" : "var(--fg-muted)";
-                        const stepBg = isCompleted ? "#58CC02" : isCurrent ? "#1CB0F6" : "var(--surface)";
-                        const stepBc = isCompleted ? "#46A302" : isCurrent ? "#0f7ac0" : "var(--border-soft)";
-                        return (
-                          <div key={idx} className="flex items-center gap-0">
-                            <div className="flex flex-col items-center min-w-[84px]">
-                              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-[14px] font-black border-[3px] transition-all shrink-0"
-                                style={{
-                                  background: stepBg,
-                                  borderColor: stepBc,
-                                  color: isCompleted || isCurrent ? "white" : "var(--fg-muted)",
-                                  boxShadow: isCurrent ? "0 0 0 5px rgba(28,176,246,0.18)" : "none",
-                                }}
-                              >
-                                {stepLabel}
-                              </div>
-                              <p className="mt-1.5 text-[9px] font-black uppercase truncate max-w-[74px] text-center leading-tight"
-                                style={{ color: stepColor }}>
-                                {isCompleted || isCurrent ? step.spotName : "🔒"}
-                              </p>
-                              <div className="mt-1 flex items-center gap-1">
-                                <span className="text-[9px]" style={{ opacity: step.arrivalApproved ? 1 : 0.25 }}>📍</span>
-                                {step.hasMiniGame && (
-                                  <span className="text-[9px]" style={{ opacity: step.miniGamePlayed ? 1 : 0.25 }}>🎮</span>
-                                )}
-                              </div>
-                            </div>
-                            {idx < route.length - 1 && (
-                              <div className="w-5 h-[3px] rounded-full mx-0.5 shrink-0"
-                                style={{
-                                  background: isCompleted ? "#58CC02" : isCurrent ? "#1CB0F6" : "var(--border-soft)",
-                                  opacity: isCompleted ? 1 : 0.35,
-                                }}
-                              />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </motion.div>
-                );
-              })}
-              {detailedTeams.filter(t => t.fullRoute.length > 0).length === 0 && (
-                <p className="text-[13px] italic opacity-60 text-center py-6" style={{ color: "var(--fg-muted)" }}>No route plans deployed yet. Use the Route Plan Creator above.</p>
-              )}
-            </div>
-          </div>
-
+          {/* 🎯 MISSION CONTROL: LIVE TEAM TRACKING */}
           <div className="mt-12 pt-8 border-t-4" style={{ borderColor: "var(--border-soft)" }}>
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-[15px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-blue)" }}>🎮 Live Tracking Flow</h3>
-              <button 
-                onClick={loadData}
-                className="btn-press rounded-xl p-2.5 bg-white shadow-sm border-2 border-gray-100 hover:border-blue-400 transition-all"
-              >
-                <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
-              </button>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+              <div>
+                <h3 className="text-[16px] font-black uppercase tracking-[0.2em] flex items-center gap-3" style={{ color: "var(--color-brand-blue)" }}>
+                  <span className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-lg">🛰️</span>
+                  Live Mission Control
+                </h3>
+                <p className="mt-1 text-[13px] font-bold opacity-60 ml-11">Real-time tracking of all team routes and mission status.</p>
+              </div>
+              
+              <div className="flex items-center gap-3 ml-11 sm:ml-0">
+                <span className="rounded-full px-4 py-2 text-[11px] font-black uppercase tracking-wider" style={{ background: "rgba(28,176,246,0.1)", color: "#1CB0F6" }}>
+                  {detailedTeams.length} Teams Online
+                </span>
+                <button 
+                  onClick={loadData}
+                  disabled={loading}
+                  className="btn-press rounded-xl p-3 bg-white shadow-md border-2 border-gray-100 hover:border-blue-400 transition-all group"
+                  title="Refresh Live Data"
+                >
+                  <RefreshCw size={20} className={`${loading ? "animate-spin text-blue-500" : "text-gray-400 group-hover:text-blue-500"}`} />
+                </button>
+              </div>
             </div>
             
-            <LiveFlowTracking teams={detailedTeams as any} />
+            <div className="rounded-[40px] p-8 sm:p-10 border-4 border-dashed" style={{ borderColor: "var(--border-soft)", background: "rgba(255,255,255,0.4)" }}>
+              {detailedTeams.length > 0 ? (
+                <LiveFlowTracking teams={detailedTeams} />
+              ) : (
+                <div className="py-20 text-center">
+                  <div className="text-5xl mb-4">🗺️</div>
+                  <p className="text-[18px] font-black" style={{ color: "var(--fg-muted)" }}>No Active Missions</p>
+                  <p className="mt-1 text-[13px] font-bold" style={{ color: "var(--fg-muted)" }}>Routes will appear here once teams start the hunt.</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -940,34 +864,20 @@ export default function AdminPage() {
     location_hint: "", 
     spot_leader_code: "", 
     has_mini_game: false, 
-    mini_game_description: "",
-    latitude: "" as any,
-    longitude: "" as any,
-    radius_meters: "" as any
+    mini_game_description: ""
   });
   const [editingSpot, setEditingSpot] = useState<string | null>(null);
   const [editSpotData, setEditSpotData] = useState<Partial<Spot>>({});
 
-  const handleSpotMapChange = (lat: number, lng: number) => {
-    setNewSpot(p => ({ ...p, latitude: lat, longitude: lng }));
-  };
 
-  const handleEditSpotMapChange = (lat: number, lng: number) => {
-    setEditSpotData(p => ({ ...p, latitude: lat, longitude: lng }));
-  };
 
   async function handleCreateSpot(e: React.FormEvent) {
     e.preventDefault();
     if (!newSpot.name.trim() || !newSpot.spot_leader_code.trim()) return;
     try { 
-      await createSpot({
-        ...newSpot,
-        latitude: newSpot.latitude ? Number(newSpot.latitude) : undefined,
-        longitude: newSpot.longitude ? Number(newSpot.longitude) : undefined,
-        radius_meters: newSpot.radius_meters ? Number(newSpot.radius_meters) : undefined,
-      }); 
+      await createSpot(newSpot); 
       flash(`📍 ${newSpot.name} created`); 
-      setNewSpot({ name: "", description: "", location_hint: "", spot_leader_code: "", has_mini_game: false, mini_game_description: "", latitude: "" as any, longitude: "" as any, radius_meters: "" as any }); 
+      setNewSpot({ name: "", description: "", location_hint: "", spot_leader_code: "", has_mini_game: false, mini_game_description: "" }); 
       await loadData(); 
     } catch (err) { flashError("Create failed"); }
   }
@@ -1007,26 +917,7 @@ export default function AdminPage() {
               <input value={newSpot.location_hint} onChange={e => setNewSpot(p => ({ ...p, location_hint: e.target.value }))} placeholder="Near the main entrance pillars" className="w-full rounded-[24px] border-4 px-6 py-4 text-[18px] font-black outline-none" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }} />
             </Field>
 
-            <Field label="Location on Map">
-              <SpotMapPicker
-                lat={newSpot.latitude ? Number(newSpot.latitude) : null}
-                lng={newSpot.longitude ? Number(newSpot.longitude) : null}
-                radius={newSpot.radius_meters ? Number(newSpot.radius_meters) : null}
-                onChange={handleSpotMapChange}
-              />
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <Field label="Latitude">
-                  <input type="number" step="any" value={newSpot.latitude} onChange={e => setNewSpot(p => ({ ...p, latitude: e.target.value }))} placeholder="23.72..." className="w-full rounded-[24px] border-4 px-6 py-4 text-[18px] font-black outline-none" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }} />
-                </Field>
-                <Field label="Longitude">
-                  <input type="number" step="any" value={newSpot.longitude} onChange={e => setNewSpot(p => ({ ...p, longitude: e.target.value }))} placeholder="90.39..." className="w-full rounded-[24px] border-4 px-6 py-4 text-[18px] font-black outline-none" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }} />
-                </Field>
-              </div>
-            </Field>
 
-            <Field label="Detection Radius (meters)">
-              <input type="number" min="10" step="10" value={newSpot.radius_meters} onChange={e => setNewSpot(p => ({ ...p, radius_meters: e.target.value }))} placeholder="100" className="w-full rounded-[24px] border-4 px-6 py-4 text-[18px] font-black outline-none" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }} />
-            </Field>
 
             <Field label="Description">
               <textarea value={newSpot.description} onChange={e => setNewSpot(p => ({ ...p, description: e.target.value }))} placeholder="Detailed instructions for the leader…" rows={3} className="w-full rounded-[24px] border-4 px-6 py-4 text-[18px] font-black outline-none" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }} />
@@ -1065,9 +956,6 @@ export default function AdminPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-[12px] font-bold opacity-60 flex-wrap" style={{ color: "var(--fg)" }}>
-                  📍 {s.latitude?.toFixed(4) || "—"}, {s.longitude?.toFixed(4) || "—"}
-                  {s.radius_meters && <span>⭕ {s.radius_meters}m radius</span>}
-                  <span className="mx-2">•</span>
                   {s.location_hint || "No hint provided."}
                 </div>
                 {s.has_mini_game && (
@@ -1095,25 +983,7 @@ export default function AdminPage() {
                       <input value={editSpotData.spot_leader_code || ""} onChange={e => setEditSpotData(p => ({ ...p, spot_leader_code: e.target.value.toUpperCase() }))} className="w-full rounded-2xl border-4 px-5 py-3 text-[16px] font-black outline-none" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }} />
                     </Field>
                   </div>
-                  <Field label="Location on Map">
-                    <SpotMapPicker
-                      lat={editSpotData.latitude ?? null}
-                      lng={editSpotData.longitude ?? null}
-                      radius={editSpotData.radius_meters ?? null}
-                      onChange={handleEditSpotMapChange}
-                    />
-                    <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                      <Field label="Latitude">
-                        <input type="number" step="any" value={editSpotData.latitude ?? ""} onChange={e => setEditSpotData(p => ({ ...p, latitude: e.target.value ? Number(e.target.value) : null }))} className="w-full rounded-2xl border-4 px-5 py-3 text-[16px] font-black outline-none" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }} />
-                      </Field>
-                      <Field label="Longitude">
-                        <input type="number" step="any" value={editSpotData.longitude ?? ""} onChange={e => setEditSpotData(p => ({ ...p, longitude: e.target.value ? Number(e.target.value) : null }))} className="w-full rounded-2xl border-4 px-5 py-3 text-[16px] font-black outline-none" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }} />
-                      </Field>
-                    </div>
-                  </Field>
-                  <Field label="Detection Radius (meters)">
-                    <input type="number" min="10" step="10" value={editSpotData.radius_meters ?? ""} onChange={e => setEditSpotData(p => ({ ...p, radius_meters: e.target.value ? Number(e.target.value) : null }))} className="w-full rounded-2xl border-4 px-5 py-3 text-[16px] font-black outline-none" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }} />
-                  </Field>
+
                   <Field label="Location Hint">
                     <input value={editSpotData.location_hint || ""} onChange={e => setEditSpotData(p => ({ ...p, location_hint: e.target.value }))} className="w-full rounded-2xl border-4 px-5 py-3 text-[16px] font-black outline-none" style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }} />
                   </Field>
@@ -1630,118 +1500,40 @@ export default function AdminPage() {
     );
   }
 
-  /* ==============================================================
-     TAB: LOCATIONS
-     ============================================================== */
-  function renderLocations() {
-    return (
-      <div className="flex flex-col gap-6">
-        <div className="card p-6" style={{ background: "var(--surface)" }}>
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-[15px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-green)" }}>
-              🗺 Live Team Locations
-            </h3>
-            <div className="flex items-center gap-4 text-[12px] font-bold">
-              <span style={{ color: "#22c55e" }}>🟢 {teamLocations.filter(t => t.isActive && !t.isDisqualified).length} active</span>
-              <span style={{ color: "#9ca3af" }}>⚪ {teamLocations.filter(t => !t.isActive && !t.isDisqualified).length} inactive</span>
-              <span style={{ color: "#ef4444" }}>🚫 {teamLocations.filter(t => t.isDisqualified).length} disqualified</span>
-            </div>
-          </div>
-          <TeamMap teams={teamLocations} spots={spots} height="480px" />
-        </div>
 
-        <div className="card p-6" style={{ background: "var(--surface)" }}>
-          <h3 className="mb-4 text-[15px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-blue)" }}>
-            🏠 Team Status
-          </h3>
-          <div className="flex flex-col gap-3">
-            {teams.length === 0 && <p className="py-4 text-center text-[15px] font-semibold" style={{ color: "var(--fg-muted)" }}>No teams yet.</p>}
-            {teams.map((t) => {
-              const loc = teamLocations.find(l => l.id === t.id);
-              const active = t.is_disqualified ? false : loc?.isActive ?? isActive(t.last_active_at);
-              return (
-                <div key={t.id} className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-3xl p-5" style={{ background: "var(--border-soft)" }}>
-                  <div className="flex flex-1 items-center justify-between sm:justify-start gap-4">
-                    <span className="text-[17px] sm:text-[19px] font-black" style={{ color: t.is_disqualified ? "var(--fg-muted)" : "var(--fg)" }}>{t.name}</span>
-                    <div className="flex items-center gap-3">
-                      {t.is_disqualified ? (
-                        <span className="rounded-2xl px-4 py-1.5 text-[11px] font-black uppercase tracking-wider" style={{ background: "rgba(255,75,75,0.15)", color: "var(--color-brand-red)" }}>🚫 DISQUALIFIED</span>
-                      ) : (
-                        <span className="rounded-2xl px-4 py-1.5 text-[11px] font-black uppercase tracking-wider" style={{ background: active ? "rgba(88,204,2,0.15)" : "rgba(156,163,175,0.15)", color: active ? "var(--color-brand-green)" : "var(--fg-muted)" }}>
-                          {active ? "🟢 ACTIVE" : "⚪ OFFLINE"}
-                        </span>
-                      )}
-                      <span className="text-[12px] font-bold opacity-60" style={{ color: "var(--fg-muted)" }}>
-                        {loc ? new Date(loc.capturedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "—"}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-end pt-3 sm:pt-0 border-t sm:border-0" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
-                    {t.is_disqualified ? (
-                      <button onClick={() => {
-                        setConfirmDef({ title: "Reinstate Team", message: `Reinstate ${t.name}? They will regain access to the dashboard.` });
-                        setConfirmHandler(() => async () => { try { await reinstateTeam(t.id); flash(`✅ ${t.name} reinstated`); await loadData(); } catch { flashError("Reinstate failed"); } });
-                      }} className="btn-press rounded-2xl px-6 py-2.5 text-[12px] font-black uppercase tracking-wide transition-all shadow-sm" style={{ background: "var(--surface)", color: "var(--color-brand-green)" }}>✅ Reinstate</button>
-                    ) : (
-                      <button onClick={() => {
-                        setConfirmDef({ title: "Disqualify Team", message: `Disqualify ${t.name}? They will be blocked from the dashboard and marked on the map.`, destructive: true });
-                        setConfirmHandler(() => async () => { try { await disqualifyTeam(t.id); flash(`🚫 ${t.name} disqualified`); await loadData(); } catch { flashError("Disqualify failed"); } });
-                      }} className="btn-press rounded-2xl px-6 py-2.5 text-[12px] font-black uppercase tracking-wide transition-all shadow-sm" style={{ background: "var(--surface)", color: "var(--color-brand-red)" }}>🚫 Disqualify</button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   /* ==============================================================
      TAB: LOGIN LINKS
      ============================================================== */
 
-  async function loadLinkTeams() {
-    setLinkLoading(true);
-    setTeamLinks({});
+  async function handleGenerateTeamLink(teamId: string, teamCode: string, teamName: string) {
+    setGeneratingTeamId(teamId);
     try {
-      const { data: teams, error: tErr } = await insforge.database
-        .from("teams")
-        .select("id, name, team_code");
-
-      if (tErr) throw new Error(tErr.message);
-      if (!teams || teams.length === 0) {
-        setTeamLinksData([]);
-        return;
-      }
-
-      setTeamLinksData((teams as any[]).map(t => ({
-        teamId: t.id,
-        teamName: t.name,
-        teamCode: t.team_code,
-      })));
+      const token = await generateLoginToken("team", teamId, {
+        teamCode: teamCode,
+        targetIsTeam: true,
+      });
+      const loginUrl = `${window.location.origin}/magic-login/${token}`;
+      setTeamLinks((prev) => ({ ...prev, [teamId]: loginUrl }));
+      await updateTeam(teamId, { login_link_url: loginUrl });
     } catch {
-      flashError("Failed to load team data");
+      flashError(`Failed to generate link for ${teamName}`);
     } finally {
-      setLinkLoading(false);
+      setGeneratingTeamId(null);
     }
   }
 
   async function handleGenerateAllTeamLinks() {
-    for (const team of teamLinksData) {
-      if (teamLinks[team.teamId]) continue;
-      try {
-        const token = await generateLoginToken("team", team.teamId, {
-          teamCode: team.teamCode,
-          targetIsTeam: true,
-        });
-        const loginUrl = `${window.location.origin}/magic-login/${token}`;
-        setTeamLinks((prev) => ({ ...prev, [team.teamId]: loginUrl }));
-      } catch {
-        flashError(`Failed to generate link for ${team.teamName}`);
+    setLinkLoading(true);
+    try {
+      for (const team of teams) {
+        if (teamLinks[team.id]) continue;
+        await handleGenerateTeamLink(team.id, team.team_code, team.name);
       }
+      // After generating all, refresh data to ensure consistency
+      await loadData();
+    } finally {
+      setLinkLoading(false);
     }
   }
 
@@ -1780,97 +1572,99 @@ export default function AdminPage() {
             </h3>
           </div>
           <p className="mb-6 text-[13px] font-semibold" style={{ color: "var(--fg-muted)" }}>
-            Generate one-click login links per team. The link logs in as the team leader. Single-use, expires in 7 days.
+            Generate one-click login links per team. The link logs in as the team leader. Multi-use, expires in 7 days.
           </p>
 
           <div className="flex flex-wrap items-center gap-4">
             <button
-              onClick={loadLinkTeams}
-              disabled={linkLoading}
+              onClick={loadData}
+              disabled={loading}
               className="btn-press rounded-2xl px-6 py-3 text-[13px] font-black uppercase tracking-wide transition-all"
               style={{ background: "var(--border-soft)", color: "var(--fg-muted)" }}
             >
-              {linkLoading ? "⏳ Loading…" : `🔄 Load Teams`}
+              {loading ? "⏳ Syncing…" : `🔄 Sync Teams`}
             </button>
 
-            {teamLinksData.length > 0 && (
+            {teams.length > 0 && (
               <button
                 onClick={handleGenerateAllTeamLinks}
+                disabled={linkLoading}
                 className="btn-press rounded-2xl px-6 py-3 text-[13px] font-black uppercase tracking-wide transition-all"
                 style={{ background: "var(--color-brand-blue)", color: "#fff" }}
               >
-                🔗 Generate All
+                {linkLoading ? "⏳ Generating..." : "🔗 Generate All"}
               </button>
             )}
           </div>
 
-          {teamLinksData.length > 0 && (
+          {teams.length > 0 && (
             <div className="grid gap-3">
-              {teamLinksData.map((t) => {
-                const link = teamLinks[t.teamId];
-                const isCopied = linkCopiedId === t.teamId;
+              {teams.map((t) => {
+                const link = teamLinks[t.id];
+                const isCopied = linkCopiedId === t.id;
+                const isCodeCopied = linkCopiedId === t.id + '-code';
+                const isGenerating = generatingTeamId === t.id;
+                const teamMembers = participants.filter(p => p.team_id === t.id);
+
                 return (
-                  <div key={t.teamId}
-                    className="flex items-center gap-4 rounded-2xl px-5 py-4 transition-all"
-                    style={{ background: "var(--border-soft)" }}
+                  <div key={t.id}
+                    className="flex flex-col gap-4 rounded-3xl p-6 transition-all border-4"
+                    style={{ background: "var(--surface)", borderColor: "var(--border-soft)" }}
                   >
-                    <div className="flex-1 min-w-0">
-                      <span className="text-[15px] font-black" style={{ color: "var(--fg)" }}>{t.teamName}</span>
-                      <p className="text-[11px] font-bold opacity-60" style={{ color: "var(--fg-muted)" }}>
-                        Code: {t.teamCode}
-                      </p>
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[17px] font-black" style={{ color: "var(--fg)" }}>{t.name}</span>
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className="text-[12px] font-bold opacity-60" style={{ color: "var(--fg-muted)" }}>
+                            Code: {t.team_code}
+                          </span>
+                          <button onClick={() => copyToClipboard(t.team_code, t.id + '-code')} className="p-1.5 rounded-lg hover:bg-black/5 transition-colors" title="Copy Team Code">
+                            <Copy size={14} className={isCodeCopied ? "text-green-500" : "text-gray-400"} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {link ? (
+                          <>
+                            <button onClick={() => copyToClipboard(link, t.id)}
+                              className="btn-press rounded-xl px-5 py-3 text-[12px] font-extrabold uppercase tracking-wide transition-all flex items-center gap-2"
+                              style={{ background: isCopied ? "var(--color-brand-green)" : "var(--color-brand-blue)", color: "#fff" }}>
+                              {isCopied ? "✅ COPIED" : "📋 COPY LOGIN LINK"}
+                            </button>
+                            <button onClick={() => handleGenerateTeamLink(t.id, t.team_code, t.name)}
+                              disabled={isGenerating}
+                              className="btn-press rounded-xl px-3 py-3 text-[14px] font-extrabold uppercase transition-all"
+                              style={{ background: "rgba(28,176,246,0.12)", color: "var(--color-brand-blue)", opacity: isGenerating ? 0.6 : 1 }}>
+                              {isGenerating ? "⏳" : <RefreshCw size={18} />}
+                            </button>
+                          </>
+                        ) : (
+                          <button onClick={() => handleGenerateTeamLink(t.id, t.team_code, t.name)}
+                            disabled={isGenerating}
+                            className="btn-press rounded-2xl px-6 py-3 text-[13px] font-black uppercase tracking-wide transition-all"
+                            style={{ background: "var(--color-brand-blue)", color: "#fff", opacity: isGenerating ? 0.6 : 1 }}>
+                            {isGenerating ? "⏳ Generating..." : "🔗 Generate Link"}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {link ? (
-                        <>
-                          <input readOnly value={link}
-                            className="w-36 sm:w-48 rounded-xl border-2 px-3 py-2 text-[12px] font-mono font-bold outline-none truncate"
-                            style={{ background: "var(--surface)", borderColor: "var(--border-soft)", color: "var(--fg)" }}
-                            onClick={(e) => (e.target as HTMLInputElement).select()} />
-                          <button onClick={() => copyToClipboard(link, t.teamId)}
-                            className="btn-press rounded-xl px-3 py-2 text-[12px] font-extrabold uppercase tracking-wide transition-all"
-                            style={{ background: isCopied ? "var(--color-brand-green)" : "var(--surface)", color: isCopied ? "#fff" : "var(--fg)" }}>
-                            {isCopied ? "✅" : "📋"}
-                          </button>
-                          <button onClick={async () => {
-                            try {
-                              const token = await generateLoginToken("team", t.teamId, {
-                                teamCode: t.teamCode,
-                                targetIsTeam: true,
-                              });
-                              const url = `${window.location.origin}/magic-login/${token}`;
-                              setTeamLinks((prev) => ({ ...prev, [t.teamId]: url }));
-                            } catch {
-                              flashError("Failed to generate link");
-                            }
-                          }}
-                            className="btn-press rounded-xl px-3 py-2 text-[11px] font-extrabold uppercase tracking-wide transition-all"
-                            style={{ background: "rgba(28,176,246,0.12)", color: "var(--color-brand-blue)" }}>
-                            🔄
-                          </button>
-                        </>
-                      ) : (
-                        <button onClick={async () => {
-                          try {
-                            const token = await generateLoginToken("team", t.teamId, {
-                              teamCode: t.teamCode,
-                              targetIsTeam: true,
-                            });
-                            const url = `${window.location.origin}/magic-login/${token}`;
-                            setTeamLinks((prev) => ({ ...prev, [t.teamId]: url }));
-                          } catch {
-                            flashError("Failed to generate link");
-                          }
-                        }}
-                          className="btn-press rounded-2xl px-5 py-2.5 text-[12px] font-extrabold uppercase tracking-wide transition-all"
-                          style={{ background: "var(--color-brand-blue)", color: "#fff" }}>
-                          🔗 Generate
-                        </button>
-                      )}
+
+                    {/* Team Members with Avatars */}
+                    <div className="pt-3 border-t-2" style={{ borderColor: "var(--border-soft)" }}>
+                      <div className="flex flex-wrap gap-2">
+                        {teamMembers.map(m => (
+                          <div key={m.id} className="flex items-center gap-2 rounded-xl px-3 py-1.5 border-2" style={{ background: "var(--surface)", borderColor: "var(--border-soft)" }}>
+                            <span className="text-[16px]">{m.avatar_emoji || "👤"}</span>
+                            <span className="text-[12px] font-bold" style={{ color: "var(--fg)" }}>{m.name}</span>
+                            {m.is_leader && <span className="text-[10px]">👑</span>}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 );
               })}
+
             </div>
           )}
         </div>
@@ -2032,7 +1826,7 @@ export default function AdminPage() {
             {tab === "broadcast" && renderBroadcast()}
             {tab === "registrations" && renderRegistrations()}
             {tab === "login-links" && renderLoginLinks()}
-            {tab === "locations" && renderLocations()}
+
           </motion.div>
         </AnimatePresence>
 

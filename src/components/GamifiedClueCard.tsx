@@ -9,6 +9,7 @@ interface Props {
   totalClues: number;
   streak: number;
   clueStartedAt: string | null;
+  helpActivatedAt?: string | null;
   timeLimitMinutes: number;
   onTimeout: () => void;
   showTimeout: boolean;
@@ -18,7 +19,7 @@ interface Props {
 
 export function GamifiedClueCard({
   clueDefinition, spot, completedClues, totalClues,
-  streak, clueStartedAt, timeLimitMinutes, onTimeout, showTimeout,
+  streak, clueStartedAt, helpActivatedAt, timeLimitMinutes, onTimeout, showTimeout,
   locked, huntStartsIn,
 }: Props) {
   const progress = totalClues > 0 ? (completedClues / totalClues) * 100 : 0;
@@ -118,10 +119,37 @@ export function GamifiedClueCard({
 
         {/* Spot badge */}
         <div className="mb-4">
-          <span className="inline-block rounded-xl px-3 py-1.5 text-[12px] font-extrabold uppercase tracking-wide" style={{ background: "rgba(28,176,246,0.1)", color: "#1CB0F6" }}>
-            📍 {spot.name}
+          <span className="inline-block rounded-xl px-3 py-1.5 text-[12px] font-extrabold uppercase tracking-wide" 
+            style={{ 
+              background: helpActivatedAt ? "rgba(255, 75, 75, 0.1)" : "rgba(28,176,246,0.1)", 
+              color: helpActivatedAt ? "#FF4B4B" : "#1CB0F6" 
+            }}>
+            📍 {helpActivatedAt ? spot.name : "Destination: ???"}
           </span>
         </div>
+
+        {/* Help Mode Status */}
+        {helpActivatedAt && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className="mb-6 rounded-2xl p-4 border-2 border-dashed border-[#FF4B4B]/30 bg-rose-50/50"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <motion.div 
+                animate={{ scale: [1, 1.2, 1] }}
+                transition={{ repeat: Infinity, duration: 1.5 }}
+                className="w-2.5 h-2.5 rounded-full bg-[#FF4B4B]"
+              />
+              <span className="text-[13px] font-black uppercase tracking-wider text-[#FF4B4B]">
+                Help Mode Active
+              </span>
+            </div>
+            <p className="text-[12px] font-bold text-[#FF4B4B]/70 leading-snug">
+              Destination revealed! ⚠️ Penalty is now <span className="font-black underline">1 pt / 2 min</span>. Reach the spot leader quickly!
+            </p>
+          </motion.div>
+        )}
 
         {/* Clue image */}
         {clueDefinition.image_url && (

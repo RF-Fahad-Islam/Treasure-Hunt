@@ -6,9 +6,7 @@ import { ExpiredOverlay } from "@/components/ExpiredOverlay";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PointsToast } from "@/components/PointsToast";
 import { LeaderboardOverlay } from "@/components/leaderboard/LeaderboardOverlay";
-import { BroadcastBanner } from "@/components/BroadcastBanner";
 import { PullToRefresh } from "@/components/PullToRefresh";
-import { LocationGate } from "@/components/LocationGate";
 import { OSStatusBar } from "@/components/OSStatusBar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { ParticipantLobby } from "@/components/ParticipantLobby";
@@ -16,26 +14,17 @@ import { TeamAvatarRoom } from "@/components/TeamAvatarRoom";
 import { OtherTeamsView } from "@/components/OtherTeamsView";
 import { TeamLogoEditModal } from "@/components/TeamLogoEditModal";
 import { GamifiedClueCard } from "@/components/GamifiedClueCard";
-import { TeamMap } from "@/components/TeamMap";
 import { useSession } from "@/store/authStore";
-import { useLeaderboardRealtime } from "@/hooks/useLeaderboardRealtime";
-import { useBroadcastListener } from "@/hooks/useBroadcastListener";
-import { useLocationTracker } from "@/hooks/useLocationTracker";
-import {
-  fetchDashboardData,
-  fetchTeamMembers,
-  updateTeamName,
-  updateTeamAvatarSeed,
-  fetchAllTeamsForLobby,
-  revealAnswer,
-} from "@/services/team";
+import { useLeaderboard } from "@/hooks/useLeaderboardRealtime";
+import { fetchDashboardData, fetchTeamMembers, fetchAllTeamsForLobby, updateTeamName, updateTeamAvatarSeed, activateHelpMode } from "@/services/team";
+import { calculateWeightedPenaltySeconds, secondsToPenaltyPoints } from "@/lib/penalty";
 import type { DashboardData, TeamLobbyEntry } from "@/services/team";
 import type { Participant } from "@/types";
-import { Home, Map, Trophy, Flag } from "lucide-react";
+import { Home, Trophy, Flag, RefreshCw } from "lucide-react";
 import { LiveFlowTracking } from "@/components/LiveFlowTracking";
 import { getAvatarUrl } from "@/lib/avatar";
 
-type App = "lobby" | "roadmap" | "map";
+type App = "lobby" | "roadmap";
 
 function useCountdown(target: string | null) {
   const [display, setDisplay] = useState<{ d: number; h: number; m: number; s: number } | null>(null);
@@ -63,7 +52,6 @@ function useCountdown(target: string | null) {
 const APPS: { key: App; label: string; icon: React.ElementType }[] = [
   { key: "lobby", label: "Lobby", icon: Home },
   { key: "roadmap", label: "Mission", icon: Flag },
-  { key: "map", label: "Map", icon: Map },
 ];
 
 export default function TeamDashboardPage() {
@@ -79,7 +67,6 @@ export default function TeamDashboardPage() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [successPoints, setSuccessPoints] = useState(0);
   const [successRank, setSuccessRank] = useState<number | undefined>(undefined);
-  const [initialPos, setInitialPos] = useState<{ lat: number; lng: number; accuracy: number | null } | null>(null);
   const [toastPoints, setToastPoints] = useState(0);
   const [showToast, setShowToast] = useState(false);
   const [showLogoEdit, setShowLogoEdit] = useState(false);
@@ -88,16 +75,11 @@ export default function TeamDashboardPage() {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showConfirmReveal, setShowConfirmReveal] = useState(false);
   const [nameInput, setNameInput] = useState("");
-  const [selectedSpotId, setSelectedSpotId] = useState<string | null>(null);
   const prevCompletedRef = useRef(0);
   const prevPointsRef = useRef(0);
   const streakCountRef = useRef(0);
 
-  useLocationTracker(teamId ?? "", initialPos);
-
-  const leaderboard = useLeaderboardRealtime();
-  const sessionRole = session?.role === "team" ? "team" : null;
-  const broadcast = useBroadcastListener(sessionRole);
+  const leaderboard = useLeaderboard();
   const { display: countdown, expired: huntStarted } = useCountdown(data?.eventConfig?.event_start_time ?? null);
 
   const isHuntActive = data?.eventConfig?.hunt_started === true || huntStarted;
@@ -173,19 +155,16 @@ export default function TeamDashboardPage() {
   const handleReveal = async () => {
     if (!data?.currentRoute || !teamId) return;
     try {
-      await revealAnswer(data.currentRoute.id, teamId);
+      await activateHelpMode(data.currentRoute.id);
       setShowConfirmReveal(false);
       setShowTimeout(false);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to reveal answer");
+      setError(err instanceof Error ? err.message : "Failed to activate help mode");
     }
   };
 
-  const handleSpotClick = (spotId: string) => {
-    setSelectedSpotId(spotId);
-    setActiveApp("map");
-  };
+
 
   const handleNewPoints = useCallback((points: number) => {
     setToastPoints(points);
@@ -214,20 +193,12 @@ export default function TeamDashboardPage() {
     } catch { /* silent */ }
   };
 
-  const myMapLocation = initialPos ? { lat: initialPos.lat, lng: initialPos.lng } : null;
-
-  const revealedSpotIds = new Set(
-    data?.fullRoute?.filter(s => s.isReached).map(s => s.spotId) ?? []
-  );
-  const revealedSpots = data?.allSpots?.filter(s => revealedSpotIds.has(s.id)) ?? [];
-  const selectedSpot = data?.allSpots?.find(s => s.id === selectedSpotId) ?? null;
-
   if (!session) {
     return (
-      <div className="relative min-h-screen overflow-hidden" style={{ background: "#F7F7F7" }}>
+      <div className="relative min-h-screen overflow-hidden" style={{ background: "var(--bg)" }}>
         <div className="flex min-h-screen flex-col items-center justify-center p-8">
           <p className="text-5xl">🔐</p>
-          <p className="mt-4 font-display text-2xl font-extrabold" style={{ color: "#777777" }}>Not logged in</p>
+          <p className="mt-4 font-display text-2xl font-extrabold" style={{ color: "var(--fg-muted)" }}>Not logged in</p>
         </div>
       </div>
     );
@@ -235,7 +206,7 @@ export default function TeamDashboardPage() {
 
   if (session.role === "team" && !teamId) {
     return (
-      <div className="relative min-h-screen overflow-hidden" style={{ background: "#F7F7F7", paddingBottom: "calc(3rem + env(safe-area-inset-bottom, 0px))" }}>
+      <div className="relative min-h-screen overflow-hidden" style={{ background: "var(--bg)", paddingBottom: "calc(3rem + env(safe-area-inset-bottom, 0px))" }}>
         <div className="mx-auto max-w-2xl px-4 pt-24">
           <ParticipantLobby />
         </div>
@@ -245,18 +216,17 @@ export default function TeamDashboardPage() {
 
   if (loading && !data) {
     return (
-      <div className="relative min-h-screen overflow-hidden" style={{ background: "#F7F7F7" }}>
+      <div className="relative min-h-screen overflow-hidden" style={{ background: "var(--bg)" }}>
         <div className="flex min-h-screen flex-col items-center justify-center">
           <motion.p animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity, duration: 1.5 }} className="text-5xl">🔍</motion.p>
-          <p className="mt-4 font-display text-xl font-extrabold" style={{ color: "#777777" }}>Loading…</p>
+          <p className="mt-4 font-display text-xl font-extrabold" style={{ color: "var(--fg-muted)" }}>Loading…</p>
         </div>
       </div>
     );
   }
 
   return (
-    <LocationGate onLocationGranted={setInitialPos}>
-    <div className="relative min-h-screen overflow-hidden pb-28" style={{ background: "#F7F7F7", paddingBottom: "calc(7rem + env(safe-area-inset-bottom, 0px))" }}>
+    <div className="relative min-h-screen overflow-hidden pb-28" style={{ background: "var(--bg)", paddingBottom: "calc(7rem + env(safe-area-inset-bottom, 0px))" }}>
 
       <SuccessOverlay open={showSuccess} onClose={() => setShowSuccess(false)} pointsEarned={successPoints} newRank={successRank} />
       <ExpiredOverlay 
@@ -266,16 +236,14 @@ export default function TeamDashboardPage() {
       />
       <ConfirmDialog
         open={showConfirmReveal}
-        title="Reveal Spot Location?"
-        message="If you reveal the spot location now, you will receive +0 bonus points for this clue. You will still incur any accrued time penalties. Continue?"
-        confirmLabel="Reveal Spot"
+        title="Reveal Destination Clue?"
+        message="If you reveal the destination clue now, you will receive +0 bonus points for this clue. You will still incur any accrued time penalties. Continue?"
+        confirmLabel="Reveal Clue"
         cancelLabel="Keep Finding"
         destructive={true}
         onConfirm={handleReveal}
         onCancel={() => setShowConfirmReveal(false)}
       />
-      <BroadcastBanner broadcast={broadcast} />
-
       <LeaderboardOverlay
         open={showLeaderboard}
         onClose={() => setShowLeaderboard(false)}
@@ -299,13 +267,13 @@ export default function TeamDashboardPage() {
             <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }}
               transition={{ type: "spring", stiffness: 240, damping: 22 }}
               className="w-full max-w-sm rounded-[32px] p-10 text-center"
-              style={{ background: "#FFFFFF", boxShadow: "0 4px 0 rgba(0,0,0,0.08), 0 16px 32px -8px rgba(0,0,0,0.12)", borderTop: "12px solid #FF4B4B" }}>
+              style={{ background: "var(--surface)", boxShadow: "0 4px 0 var(--border-soft), 0 16px 32px -8px var(--border-strong)", borderTop: "12px solid #FF4B4B" }}>
               <div className="mb-4 text-5xl">🚫</div>
               <h2 className="mb-2 text-[20px] font-extrabold" style={{ color: "#FF4B4B" }}>Team Disqualified</h2>
-              <p className="mb-2 text-[14px] font-semibold leading-relaxed" style={{ color: "#777777" }}>
+              <p className="mb-2 text-[14px] font-semibold leading-relaxed" style={{ color: "var(--fg-muted)" }}>
                 Your team has been disqualified by the admin.
               </p>
-              <p className="text-[12px] font-bold leading-relaxed" style={{ color: "#777777", opacity: 0.6 }}>
+              <p className="text-[12px] font-bold leading-relaxed" style={{ color: "var(--fg-muted)", opacity: 0.6 }}>
                 You can no longer participate in the hunt.
               </p>
             </motion.div>
@@ -318,7 +286,7 @@ export default function TeamDashboardPage() {
         teamName={data?.team.name ?? ""}
         teamSeed={teamSeed}
         teamMembers={teamMembers}
-        hasGps={initialPos !== null}
+        hasGps={false}
         onTeamNameEdit={() => { setNameInput(data?.team.name ?? ""); setShowNameEdit(true); }}
         onTeamAvatarEdit={() => setShowLogoEdit(true)}
       />
@@ -332,21 +300,21 @@ export default function TeamDashboardPage() {
             <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
               className="relative rounded-[32px] p-6 w-full max-w-sm shadow-2xl"
-              style={{ background: "#FFFFFF", boxShadow: "0 4px 0 rgba(0,0,0,0.08), 0 16px 32px -8px rgba(0,0,0,0.12)" }}>
+              style={{ background: "var(--surface)", boxShadow: "0 4px 0 var(--border-soft), 0 16px 32px -8px var(--border-strong)" }}>
               <div className="relative z-10">
-                <h3 className="font-display text-xl font-black mb-5 text-center" style={{ color: "#2B2B2B" }}>Edit Team Name</h3>
+                <h3 className="font-display text-xl font-black mb-5 text-center" style={{ color: "var(--fg)" }}>Edit Team Name</h3>
                 <input
                   type="text"
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
                   className="w-full rounded-2xl border-2 px-4 py-3.5 text-[15px] font-bold outline-none mb-5 transition-all"
-                  style={{ background: "#F7F7F7", borderColor: "#E0E0E0", color: "#2B2B2B" }}
+                  style={{ background: "var(--bg)", borderColor: "#E0E0E0", color: "var(--fg)" }}
                   onKeyDown={(e) => { if (e.key === "Enter") handleTeamNameSave(); }}
                 />
                 <div className="flex gap-3">
                   <button onClick={() => setShowNameEdit(false)}
                     className="btn-press flex-1 py-3.5 rounded-2xl text-[14px] font-black"
-                    style={{ background: "#F0F0F0", color: "#777777" }}>Cancel</button>
+                    style={{ background: "var(--accent-on-surface)", color: "var(--fg-muted)" }}>Cancel</button>
                   <button onClick={handleTeamNameSave}
                     className="btn-press flex-1 py-3.5 rounded-2xl text-[14px] font-black text-white"
                     style={{ background: "#58CC02", boxShadow: "0 4px 0 0 #3A8400" }}>Save</button>
@@ -388,7 +356,7 @@ export default function TeamDashboardPage() {
                     <Reveal delay={0.06} duration={0.6}>
                       <motion.div
                         className="relative overflow-hidden rounded-[32px] p-8 sm:p-10 text-center"
-                        style={{ background: "#FFF8E0", boxShadow: "0 4px 0 rgba(255,200,0,0.2), 0 12px 24px -8px rgba(0,0,0,0.06)" }}
+                        style={{ background: "#FFF8E0", boxShadow: "0 4px 0 rgba(255,200,0,0.2), 0 12px 24px -8px var(--border-soft)" }}
                       >
                         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,200,0,0.06)_0%,transparent_70%)] pointer-events-none" />
                         <div className="relative z-10">
@@ -443,6 +411,7 @@ export default function TeamDashboardPage() {
                         leaderboard={leaderboard}
                         myTeamName={data.team.name}
                         showLeaderboard={() => setShowLeaderboard(true)}
+                        onRefresh={load}
                       />
                     </Reveal>
                   </>
@@ -453,14 +422,28 @@ export default function TeamDashboardPage() {
                       <div className="grid grid-cols-2 gap-3 sm:gap-4">
                         <GamifiedStatCard
                           icon="⭐"
-                          label="Points"
-                          value={`+${data.team.total_points ?? 0}`}
+                          label="Score"
+                          value={`${Math.max(0, (data.team.total_points ?? 0) - secondsToPenaltyPoints(
+                            (data.team.total_penalty_seconds ?? 0) + 
+                            (data.currentRoute ? calculateWeightedPenaltySeconds(
+                              data.currentRoute.clue_started_at,
+                              data.currentRoute.clue_solved_at,
+                              data.currentRoute.help_activated_at
+                            ) : 0)
+                          ))}`}
                           color="#58CC02"
                         />
                         <GamifiedStatCard
                           icon="⏱"
                           label="Penalty"
-                          value={`-${data.team.total_penalty_seconds ? (data.team.total_penalty_seconds / 60).toFixed(0) : 0} min`}
+                          value={`-${secondsToPenaltyPoints(
+                            (data.team.total_penalty_seconds ?? 0) + 
+                            (data.currentRoute ? calculateWeightedPenaltySeconds(
+                              data.currentRoute.clue_started_at,
+                              data.currentRoute.clue_solved_at,
+                              data.currentRoute.help_activated_at
+                            ) : 0)
+                          )} pts`}
                           color="#FF4B4B"
                         />
                       </div>
@@ -469,16 +452,16 @@ export default function TeamDashboardPage() {
                     {/* Clues progress bar */}
                     <Reveal delay={0.09} duration={0.5}>
                       <div className="rounded-[24px] p-5 sm:p-6"
-                        style={{ background: "#FFFFFF", boxShadow: "0 4px 0 rgba(0,0,0,0.06), 0 12px 24px -8px rgba(0,0,0,0.08)" }}>
+                        style={{ background: "var(--surface)", boxShadow: "0 4px 0 var(--border-soft), 0 12px 24px -8px var(--border-soft)" }}>
                         <div className="flex items-center justify-between mb-3">
-                          <span className="text-[11px] font-extrabold uppercase tracking-[0.15em]" style={{ color: "#777777" }}>
+                          <span className="text-[11px] font-extrabold uppercase tracking-[0.15em]" style={{ color: "var(--fg-muted)" }}>
                             Clue Progress
                           </span>
                           <span className="text-[13px] font-black tabular-nums" style={{ color: "#1CB0F6" }}>
                             {data.completedClues}/{data.totalClues}
                           </span>
                         </div>
-                        <div className="h-3 rounded-full overflow-hidden" style={{ background: "#F0F0F0" }}>
+                        <div className="h-3 rounded-full overflow-hidden" style={{ background: "var(--accent-on-surface)" }}>
                           <motion.div
                             initial={{ width: 0 }}
                             animate={{ width: `${data.totalClues > 0 ? (data.completedClues / data.totalClues) * 100 : 0}%` }}
@@ -489,7 +472,7 @@ export default function TeamDashboardPage() {
                             <div className="shimmer absolute inset-0" />
                           </motion.div>
                         </div>
-                        <p className="mt-2 text-[11px] font-semibold" style={{ color: "#999999" }}>
+                        <p className="mt-2 text-[11px] font-semibold" style={{ color: "var(--fg-muted)" }}>
                           {data.completedClues === data.totalClues ? "🎉 All clues completed!" : `${data.totalClues - data.completedClues} more to go`}
                         </p>
                       </div>
@@ -504,6 +487,7 @@ export default function TeamDashboardPage() {
                         totalClues={data.totalClues}
                         streak={streakCountRef.current}
                         clueStartedAt={data.currentRoute?.clue_started_at ?? null}
+                        helpActivatedAt={data.currentRoute?.help_activated_at ?? null}
                         timeLimitMinutes={data.eventConfig?.clue_time_limit_minutes ?? 40}
                         onTimeout={handleTimeout}
                         showTimeout={showTimeout}
@@ -533,6 +517,7 @@ export default function TeamDashboardPage() {
                         leaderboard={leaderboard}
                         myTeamName={data.team.name}
                         showLeaderboard={() => setShowLeaderboard(true)}
+                        onRefresh={load}
                       />
                     </Reveal>
                   </>
@@ -546,14 +531,14 @@ export default function TeamDashboardPage() {
                 {/* Hero Header */}
                 <Reveal delay={0.06} duration={0.5}>
                   <div className="rounded-[32px] p-8 sm:p-10 text-center relative overflow-hidden"
-                    style={{ background: "linear-gradient(135deg, #FFFFFF 0%, #F0FFF4 100%)", boxShadow: "0 4px 0 rgba(0,0,0,0.06), 0 12px 24px -8px rgba(0,0,0,0.08)" }}>
+                    style={{ background: "linear-gradient(135deg, var(--surface) 0%, #F0FFF4 100%)", boxShadow: "0 4px 0 var(--border-soft), 0 12px 24px -8px var(--border-soft)" }}>
                     <motion.div 
                       animate={{ rotate: [0, 8, -8, 0], scale: [1, 1.05, 1] }} 
                       transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }} 
                       className="mb-4 text-5xl"
                     >🚩</motion.div>
-                    <h2 className="font-display text-2xl font-black mb-2" style={{ color: "#2B2B2B" }}>Mission Roadmap</h2>
-                    <p className="text-[14px] font-bold mb-5" style={{ color: "#777777" }}>Track your progress across all event spots.</p>
+                    <h2 className="font-display text-2xl font-black mb-2" style={{ color: "var(--fg)" }}>Mission Roadmap</h2>
+                    <p className="text-[14px] font-bold mb-5" style={{ color: "var(--fg-muted)" }}>Track your progress across all event spots.</p>
 
                     {/* Progress Summary */}
                     {data?.fullRoute && (
@@ -576,10 +561,10 @@ export default function TeamDashboardPage() {
                 {/* Flow Tracking Roadmap */}
                 <Reveal delay={0.12} duration={0.6}>
                   {data?.fullRoute && data.fullRoute.length > 0 ? (
-                    <div className="rounded-[32px] p-6 sm:p-8" style={{ background: "#FFFFFF", boxShadow: "0 4px 0 rgba(0,0,0,0.06), 0 12px 24px -8px rgba(0,0,0,0.08)" }}>
+                    <div className="rounded-[32px] p-6 sm:p-8" style={{ background: "var(--surface)", boxShadow: "0 4px 0 var(--border-soft), 0 12px 24px -8px var(--border-soft)" }}>
                       <div className="mb-4 flex items-center gap-2">
                         <span className="text-lg">🎯</span>
-                        <span className="text-[12px] font-black uppercase tracking-widest" style={{ color: "#777" }}>Your Journey</span>
+                        <span className="text-[12px] font-black uppercase tracking-widest" style={{ color: "var(--fg-muted)" }}>Your Journey</span>
                       </div>
                       <LiveFlowTracking 
                         teams={[{
@@ -590,14 +575,13 @@ export default function TeamDashboardPage() {
                           huntCompleted: !!data.team.hunt_completed,
                         } as any]} 
                         hideFutureSpots={true}
-                        onSpotClick={(id) => handleSpotClick(id)}
                       />
                     </div>
                   ) : (
-                    <div className="rounded-[24px] p-12 text-center" style={{ background: "#FFFFFF", boxShadow: "0 4px 0 rgba(0,0,0,0.06)" }}>
+                    <div className="rounded-[24px] p-12 text-center" style={{ background: "var(--surface)", boxShadow: "0 4px 0 var(--border-soft)" }}>
                       <span className="text-5xl mb-4 block">🗺️</span>
-                      <p className="text-[18px] font-extrabold" style={{ color: "#777" }}>No route assigned yet</p>
-                      <p className="mt-1 text-[13px]" style={{ color: "#aaa" }}>Your mission path will appear once the admin deploys routes.</p>
+                      <p className="text-[18px] font-extrabold" style={{ color: "var(--fg-muted)" }}>No route assigned yet</p>
+                      <p className="mt-1 text-[13px]" style={{ color: "var(--fg-muted)" }}>Your mission path will appear once the admin deploys routes.</p>
                     </div>
                   )}
                 </Reveal>
@@ -613,10 +597,10 @@ export default function TeamDashboardPage() {
                         { icon: "📍", label: "Arrival", desc: "Arrival approved", color: "#58CC02" },
                         { icon: "🎮", label: "Mini-Game", desc: "Bonus activity done", color: "#FFC800" },
                       ].map((m) => (
-                        <div key={m.label} className="rounded-2xl p-3 text-center" style={{ background: "#FFFFFF", boxShadow: "0 2px 0 rgba(0,0,0,0.04)" }}>
+                        <div key={m.label} className="rounded-2xl p-3 text-center" style={{ background: "var(--surface)", boxShadow: "0 2px 0 rgba(0,0,0,0.04)" }}>
                           <span className="text-2xl block mb-1">{m.icon}</span>
                           <p className="text-[11px] font-black" style={{ color: m.color }}>{m.label}</p>
-                          <p className="text-[9px] font-bold" style={{ color: "#aaa" }}>{m.desc}</p>
+                          <p className="text-[9px] font-bold" style={{ color: "var(--fg-muted)" }}>{m.desc}</p>
                         </div>
                       ))}
                     </div>
@@ -625,48 +609,13 @@ export default function TeamDashboardPage() {
               </div>
             )}
 
-            {/* ── APP: MAP ── */}
-            {activeApp === "map" && (
-              <div>
-                <Reveal delay={0.06} duration={0.5}>
-                  <div className="rounded-[24px] overflow-hidden" style={{ height: "60vh", minHeight: 360, boxShadow: "0 4px 0 rgba(0,0,0,0.06), 0 12px 24px -8px rgba(0,0,0,0.08)" }}>
-                    <TeamMap
-                      teams={[]}
-                      spots={revealedSpots}
-                      height="100%"
-                      myLocation={selectedSpot ? { lat: selectedSpot.latitude!, lng: selectedSpot.longitude! } : myMapLocation}
-                    />
-                  </div>
-                  {revealedSpots.length === 0 && (
-                    <p className="mt-3 text-center text-[12px] font-bold" style={{ color: "#999" }}>
-                      🔒 No spots revealed yet. Complete clues to unlock locations on the map.
-                    </p>
-                  )}
-                  {selectedSpot && (
-                    <div className="mt-3 rounded-2xl p-4 border-2 border-[#1CB0F620]" style={{ background: "rgba(28,176,246,0.04)" }}>
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">📍</span>
-                        <div>
-                          <p className="text-[15px] font-black" style={{ color: "#2B2B2B" }}>{selectedSpot.name}</p>
-                          {selectedSpot.description && (
-                            <p className="text-[12px] font-medium mt-0.5" style={{ color: "#777" }}>{selectedSpot.description}</p>
-                          )}
-                          {selectedSpot.location_hint && (
-                            <p className="text-[11px] font-bold mt-0.5" style={{ color: "#1CB0F6" }}>🔎 {selectedSpot.location_hint}</p>
-                          )}
-                        </div>
-                        <button onClick={() => setSelectedSpotId(null)} className="ml-auto shrink-0 rounded-xl px-3 py-1.5 text-[11px] font-black" style={{ background: "#F0F0F0", color: "#777" }}>✕</button>
-                      </div>
-                    </div>
-                  )}
-                </Reveal>
-              </div>
-            )}
+
+
           </>
         )}
 
         <Reveal delay={0.2} duration={0.5}>
-          <p className="mt-12 text-center text-[13px] font-semibold" style={{ color: "#BBBBBB" }}>
+          <p className="mt-12 text-center text-[13px] font-semibold" style={{ color: "var(--fg-muted)" }}>
             Treasure Hunt · University of Dhaka — CSE
           </p>
         </Reveal>
@@ -675,8 +624,8 @@ export default function TeamDashboardPage() {
 
       {/* Dock */}
       <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-center pt-2 px-4"
-        style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))", background: "linear-gradient(0deg, rgba(247,247,247,0.95) 60%, transparent)" }}>
-        <div className="inline-flex rounded-2xl p-1.5 gap-1 backdrop-blur-xl shadow-2xl items-center" style={{ background: "rgba(255,255,255,0.9)", border: "1px solid rgba(0,0,0,0.06)" }}>
+        style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))", background: "linear-gradient(0deg, var(--bg) 60%, transparent)" }}>
+        <div className="inline-flex rounded-2xl p-1.5 gap-1 backdrop-blur-xl shadow-2xl items-center" style={{ background: "var(--surface)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", border: "1px solid var(--border-soft)" }}>
           {APPS.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
@@ -684,7 +633,7 @@ export default function TeamDashboardPage() {
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[12px] font-black uppercase tracking-wide transition-all"
               style={{
                 background: activeApp === key ? "#58CC02" : "transparent",
-                color: activeApp === key ? "#FFFFFF" : "#777777",
+                color: activeApp === key ? "#FFFFFF" : "var(--fg-muted)",
                 boxShadow: activeApp === key ? "0 2px 8px rgba(88,204,2,0.3)" : "none",
               }}
             >
@@ -692,12 +641,11 @@ export default function TeamDashboardPage() {
               <span className="hidden sm:inline">{label}</span>
             </button>
           ))}
-          <div className="w-px h-6 mx-1" style={{ background: "rgba(0,0,0,0.06)" }} />
+          <div className="w-px h-6 mx-1" style={{ background: "var(--border-soft)" }} />
           <NotificationBell teamId={teamId!} onNewPoints={handleNewPoints} dropUp />
         </div>
       </div>
     </div>
-    </LocationGate>
   );
 }
 
@@ -707,12 +655,12 @@ function TimeBlock({ value, label }: { value: number; label: string }) {
   return (
     <div className="flex flex-col items-center">
       <div className="w-14 h-18 sm:w-18 sm:h-22 rounded-2xl flex items-center justify-center relative overflow-hidden"
-        style={{ background: "#FFFFFF", boxShadow: "0 2px 0 rgba(255,200,0,0.15), 0 8px 16px -4px rgba(0,0,0,0.06)" }}>
-        <span className="font-display text-2xl sm:text-3xl font-black tracking-tighter tabular-nums" style={{ color: "#2B2B2B" }}>
+        style={{ background: "var(--surface)", boxShadow: "0 2px 0 rgba(255,200,0,0.15), 0 8px 16px -4px var(--border-soft)" }}>
+        <span className="font-display text-2xl sm:text-3xl font-black tracking-tighter tabular-nums" style={{ color: "var(--fg)" }}>
           {value.toString().padStart(2, "0")}
         </span>
       </div>
-      <span className="mt-1.5 text-[10px] font-extrabold uppercase tracking-[0.2em]" style={{ color: "#999999" }}>{label}</span>
+      <span className="mt-1.5 text-[10px] font-extrabold uppercase tracking-[0.2em]" style={{ color: "var(--fg-muted)" }}>{label}</span>
     </div>
   );
 }
@@ -729,7 +677,7 @@ function TimeDot() {
 function GamifiedStatCard({ icon, label, value, color }: { icon: string; label: string; value: string; color: string }) {
   return (
     <div className="relative overflow-hidden rounded-[24px] p-5 sm:p-6 transition-all hover:scale-[1.02]"
-      style={{ background: "#FFFFFF", boxShadow: `0 4px 0 ${color}30, 0 8px 16px -4px rgba(0,0,0,0.06)`, borderTop: `4px solid ${color}` }}>
+      style={{ background: "var(--surface)", boxShadow: `0 4px 0 ${color}30, 0 8px 16px -4px var(--border-soft)`, borderTop: `4px solid ${color}` }}>
       <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full pointer-events-none" style={{ background: `radial-gradient(circle, ${color}12 0%, transparent 70%)` }} />
       <div className="relative z-10">
         <div className="flex items-center gap-2 mb-1">
@@ -750,34 +698,44 @@ function GamifiedStatCard({ icon, label, value, color }: { icon: string; label: 
 
 const AVATAR_COLORS = ["#1CB0F6", "#EC4899", "#8B5CF6", "#FF9500", "#22D3EE", "#A3E635"];
 
-function LiveStandingsSection({ leaderboard, myTeamName, showLeaderboard }: {
+function LiveStandingsSection({ leaderboard, myTeamName, showLeaderboard, onRefresh }: {
   leaderboard: { id: string; rank: number; name: string; score: number; avatarSeed: string }[];
   myTeamName: string;
   showLeaderboard: () => void;
+  onRefresh?: () => void;
 }) {
   const myRank = leaderboard.findIndex(e => e.name === myTeamName) + 1;
   const topDisplay = leaderboard.slice(0, 20);
 
   return (
-    <div className="rounded-[24px] p-5 sm:p-6" style={{ background: "#FFFFFF", boxShadow: "0 4px 0 rgba(255,200,0,0.15), 0 12px 24px -8px rgba(0,0,0,0.06)" }}>
+    <div className="rounded-[24px] p-5 sm:p-6" style={{ background: "var(--surface)", boxShadow: "0 4px 0 rgba(255,200,0,0.15), 0 12px 24px -8px var(--border-soft)" }}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Trophy size={18} style={{ color: "#FFC800" }} />
-          <span className="text-[13px] font-extrabold uppercase tracking-[0.15em]" style={{ color: "#FFC800" }}>Live Standings</span>
+          <span className="text-[13px] font-extrabold uppercase tracking-[0.15em]" style={{ color: "#FFC800" }}>Standings</span>
         </div>
-        <button onClick={showLeaderboard}
-          className="text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1"
-          style={{ color: "#999999" }}>
-          Full Board
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m9 18 6-6-6-6" /></svg>
-        </button>
+        <div className="flex items-center gap-2">
+          {onRefresh && (
+            <button onClick={onRefresh}
+              className="text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1 hover:opacity-70 transition-opacity"
+              style={{ color: "var(--fg-muted)" }}>
+              <RefreshCw size={13} />
+            </button>
+          )}
+          <button onClick={showLeaderboard}
+            className="text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1"
+            style={{ color: "var(--fg-muted)" }}>
+            Full Board
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m9 18 6-6-6-6" /></svg>
+          </button>
+        </div>
       </div>
 
       {myRank > 0 && (
         <div className="mb-4 rounded-2xl px-4 py-3 flex items-center gap-3"
           style={{ background: "rgba(88,204,2,0.08)", border: "1px solid rgba(88,204,2,0.2)" }}>
           <span className="text-lg">🏆</span>
-          <span className="text-[13px] font-bold" style={{ color: "#2B2B2B" }}>
+          <span className="text-[13px] font-bold" style={{ color: "var(--fg)" }}>
             You're <span style={{ color: "#58CC02", fontWeight: 900 }}>#{myRank}</span> of {leaderboard.length}
           </span>
           {myRank === 1 && <span className="text-[11px] font-extrabold ml-auto" style={{ color: "#FFC800" }}>👑 LEADING</span>}
@@ -799,17 +757,17 @@ function LiveStandingsSection({ leaderboard, myTeamName, showLeaderboard }: {
               transition={{ delay: i * 0.04, duration: 0.3 }}
               className="flex items-center gap-3 rounded-2xl px-4 py-2.5 transition-all"
               style={{
-                background: isMe ? "rgba(88,204,2,0.06)" : "#F7F7F7",
+                background: isMe ? "rgba(88,204,2,0.06)" : "var(--bg)",
                 border: isMe ? "1px solid rgba(88,204,2,0.2)" : "1px solid transparent",
               }}
             >
-              <span className="w-8 text-center text-[13px] font-black tabular-nums" style={{ color: entry.rank <= 3 ? "#FFC800" : "#BBBBBB" }}>
+              <span className="w-8 text-center text-[13px] font-black tabular-nums" style={{ color: entry.rank <= 3 ? "#FFC800" : "var(--fg-muted)" }}>
                 {rankIcon}
               </span>
               <div className="w-7 h-7 rounded-full shrink-0 overflow-hidden" style={{ background: color }}>
                 <img src={getAvatarUrl(entry.avatarSeed, 28)} alt="" className="w-full h-full object-cover" />
               </div>
-              <span className="flex-1 text-[13px] font-bold truncate" style={{ color: isMe ? "#58CC02" : "#2B2B2B" }}>
+              <span className="flex-1 text-[13px] font-bold truncate" style={{ color: isMe ? "#58CC02" : "var(--fg)" }}>
                 {entry.name}
                 {isMe && <span className="ml-1.5 text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full" style={{ background: "rgba(88,204,2,0.15)", color: "#58CC02" }}>You</span>}
               </span>

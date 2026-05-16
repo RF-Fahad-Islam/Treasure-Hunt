@@ -21,6 +21,8 @@ export interface Team {
   hunt_completed: boolean | null;
   is_disqualified: boolean | null;
   last_active_at: string | null;
+  calculatedScore?: number;
+  login_link_url?: string;
   created_at: string | null;
 }
 
@@ -47,9 +49,6 @@ export interface Spot {
   login_link_url: string | null;
   has_mini_game: boolean | null;
   mini_game_description: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  radius_meters: number | null;
   created_at: string | null;
 }
 
@@ -62,15 +61,7 @@ export interface ClueDefinition {
   created_at: string | null;
 }
 
-export interface TeamLocation {
-  id: string;
-  team_id: string;
-  latitude: number;
-  longitude: number;
-  accuracy: number | null;
-  captured_at: string;
-  created_at: string | null;
-}
+
 
 export interface TeamRoute {
   id: string;
@@ -91,6 +82,7 @@ export interface TeamRoute {
   mini_game_played: boolean | null;
   mini_game_points: number | null;
   penalty_seconds: number | null;
+  help_activated_at: string | null;
   approved_by_spot_leader: boolean | null;
   created_at: string | null;
 }

@@ -1,4 +1,5 @@
 import { insforge } from "@/lib/insforge";
+import { secondsToPenaltyPoints } from "@/lib/penalty";
 import type { Team, TeamRoute, Spot, ClueDefinition, EventConfig, Participant } from "@/types";
 
 export interface TeamLobbyEntry {
@@ -135,6 +136,7 @@ export async function fetchDashboardData(teamId: string): Promise<DashboardData>
   };
 }
 
+
 /* ─── Leaderboard ────────────────────────────────────────────── */
 
 export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
@@ -151,7 +153,7 @@ export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
     id: t.id,
     rank: i + 1,
     name: t.name,
-    score: t.total_points ?? 0,
+    score: Math.max(0, (t.total_points ?? 0) - secondsToPenaltyPoints(t.total_penalty_seconds ?? 0)),
     penalty: t.total_penalty_seconds ?? 0,
     completed: t.hunt_completed ?? false,
     avatarSeed: t.avatar_seed || t.name,
@@ -166,13 +168,15 @@ export async function revealAnswer(
 ): Promise<void> {
   const { data: team } = await insforge.database
     .from("teams")
-    .select("current_clue_index")
+    .select("current_clue_index, total_points")
     .eq("id", teamId)
     .single();
 
   if (!team) throw new Error("Team not found");
 
+  const currentPoints = (team as any).total_points ?? 0;
   const currentIdx = (team as any).current_clue_index ?? 0;
+  const BASE_POINTS = 100;
 
   await Promise.all([
     insforge.database
@@ -180,16 +184,33 @@ export async function revealAnswer(
       .update({
         status: "revealed",
         answer_revealed: true,
-        points_awarded: 0,
+        points_awarded: BASE_POINTS,
         clue_solved_at: new Date().toISOString(),
       })
       .eq("id", routeId),
 
     insforge.database
       .from("teams")
-      .update({ current_clue_index: currentIdx + 1 })
+      .update({ 
+        current_clue_index: currentIdx + 1,
+        total_points: currentPoints + BASE_POINTS
+      })
       .eq("id", teamId),
   ]);
+}
+
+/* ─── Activate help mode (reveal location/map) ─────────────── */
+
+export async function activateHelpMode(routeId: string): Promise<void> {
+  const { error } = await insforge.database
+    .from("team_routes")
+    .update({ 
+      help_activated_at: new Date().toISOString(),
+      status: "active" // Keep it active
+    })
+    .eq("id", routeId);
+
+  if (error) throw new Error(error.message);
 }
 
 /* ─── Keep searching (snooze timer) ──────────────────────────── */

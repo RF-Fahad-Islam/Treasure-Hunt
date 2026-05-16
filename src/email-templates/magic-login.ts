@@ -51,7 +51,7 @@ export function magicLoginEmailHtml({
               <div style="height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.1),transparent);margin-bottom:24px;"></div>
 
               <p style="font-size:14px;font-weight:600;color:#888888;margin:0 0 24px;line-height:1.6;">
-                This link is unique and can only be used once. It will expire in 7 days.
+                This link will expire in 7 days. You can use it multiple times, but only one session will be active at a time.
                 If you didn't request this, you can safely ignore this email.
               </p>
 

@@ -12,7 +12,7 @@
 | Animation | Motion (Framer Motion v11) |
 | Maps | Leaflet + react-leaflet 5 |
 | State | Zustand v5 + persist |
-| Backend | InsForge (PostgreSQL + REST + WebSocket) via `@insforge/sdk` ^1.2.9 |
+| Backend | Supabase (PostgreSQL + Realtime + Storage) via `@supabase/supabase-js` |
 | Charts | Chart.js 4 + react-chartjs-2 |
 | Audio | Web Audio API + `navigator.vibrate` |
 | PWA | vite-plugin-pwa |
@@ -30,8 +30,8 @@ npm run lint        # tsc -b (type-check only)
 
 Env (`.env.local`):
 ```
-VITE_INSFORGE_URL=https://<project>.insforge.app
-VITE_INSFORGE_ANON_KEY=...
+VITE_SUPABASE_URL=https://<project>.supabase.co
+VITE_SUPABASE_ANON_KEY=...
 VITE_ADMIN_PASSWORD=admin2026
 ```
 
@@ -45,7 +45,7 @@ src/
 ├── main.tsx                         # BrowserRouter → App
 ├── index.css                        # Tailwind v4 + theme vars (light/dark)
 │
-├── lib/insforge.ts                  # createClient(baseUrl, anonKey)
+├── lib/supabase.ts                  # createClient(supabaseUrl, anonKey)
 ├── types/index.ts                   # Team, Participant, Spot, ClueDefinition,
 │                                    #   TeamLocation, TeamRoute, EventConfig,
 │                                    #   AppSession (Team|SpotLeader|Admin), Session
@@ -106,14 +106,29 @@ src/
     └── Results/                     # Public podium + ranked list + confetti
 
 migrations/
-  20260514183613_make-leaderboard-realtime.sql   # leaderboard channel + DB trigger
-  20260514183755_create-broadcast-channel.sql     # broadcast channel
+  ⚠️ The following 3 files reference InsForge-specific `realtime` schema (realtime.channels + realtime.publish).
+     These are NOT migrated to Supabase. Supabase Realtime uses pg Publication-based replication, not PG
+     triggers. If Realtime is needed later, subscribe to PostgreSQL changes via supabase-js channel() API.
+
+  20260514183613_make-leaderboard-realtime.sql   # SKIPPED — InsForge-specific `realtime.publish()` trigger
+  20260514183755_create-broadcast-channel.sql     # SKIPPED — InsForge-specific `realtime.channels` insert
   20260515014600_add-lat-long-to-spots.sql        # spots.latitude, longitude
-  20260515120000_create-team-locations.sql        # team_locations table + team_location channel
+  20260515120000_create-team-locations.sql        # team_locations table (KEEP) + team_location channel (SKIP)
   20260515140000_add-missing-columns-team-routes.sql
   20260515150000_create-registrations.sql
   20260515150001_add-spot-coordinates.sql         # spots.radius_meters
-  20260515151000_add-event-start-time.sql         # event_config.hunt_started_at
+  20260515151000_add-event-start-time.sql         # event_config.hunt_started_at, event_start_time
+  20260515160000_add-email-to-registrations.sql
+  20260515170000_add-avatar-to-participants.sql   # participants.avatar_emoji, avatar_color
+  20260515180000_add-approved-to-registrations.sql
+  20260515190000_create-notifications.sql
+  20260515200000_create-login-tokens.sql
+  20260515210000_add-arrival-approval-level.sql    # team_routes: arrival_approved, mini_game columns
+  20260515220000_add-team-avatar-seed.sql
+  20260515230000_add-spot-login-link.sql
+  20260515230001_create-mini-game-scores.sql
+  20260515230002_add-avatar-to-registrations.sql
+  20260515230003_create-admins-table.sql
 ```
 
 ---
@@ -131,13 +146,17 @@ migrations/
 
 ---
 
-## Realtime Channels
+## Realtime (Not Currently Active)
 
-| Channel | Pub | Sub | Mechanism |
-|---------|-----|-----|-----------|
-| `leaderboard` | DB trigger on teams INSERT/UPDATE | Landing, TeamDashboard | `realtime.publish('leaderboard', 'team_updated', {...})` |
-| `broadcast` | Admin panel via SDK | SpotLeader, TeamDashboard | `realtime.publish('broadcast', 'new_broadcast', {message, audience})` |
-| `team_location` | Team devices (useLocationTracker) | SpotLeader, Admin | `realtime.publish('team_location', 'location_update', {teamId, lat, lng})` |
+The app previously used InsForge's PostgreSQL-trigger-based realtime (`realtime.publish()`) for three channels:
+- `leaderboard` — DB trigger on teams INSERT/UPDATE
+- `broadcast` — Admin broadcasts to all users
+- `team_location` — GPS location streaming from team devices
+
+These were NOT migrated to Supabase because:
+1. InsForge used a custom `realtime.publish()` PG function in a `realtime` schema — Supabase doesn't have this
+2. The frontend code currently **polls** the database instead of subscribing (useLeaderboardRealtime.ts is a polling hook)
+3. To add Supabase Realtime later, use `supabase.channel('...').on('postgres_changes', ...).subscribe()`
 
 ---
 
@@ -298,11 +317,12 @@ No DB-level proximity detection — purely client-side via `useProximityAlert` w
 - **Data attributes** on buttons: `data-sound="click|heavy|confirm|success|error"` triggers audio feedback
 - **Map imports**: Always import `"leaflet/dist/leaflet.css"` in any file using Leaflet
 - **Admin panel**: Single file `Admin/index.tsx` (~1620 lines), each tab rendered by a `renderX()` function, state vars at top
-- **DB queries**: Use `insforge.database.from("table").select(...)` — InsForge SDK, Supabase-compatible syntax
-- **Migrations**: Timestamp-prefixed SQL files in `migrations/`, apply with `npx @insforge/cli db migrations up --all`
+- **DB queries**: Use `supabase.from("table").select(...)` — imports from `@/lib/supabase`
+- **Migrations**: Timestamp-prefixed SQL files in `migrations/`, apply via Supabase SQL Editor or `supabase db push`
 
 ---
 
 ## Known Issues
 
-- `src/components/RollLookup.tsx` has a stale import of `src/services/supabase` — the file no longer exists (migrated to `@insforge/sdk`). Remove the import if encountered; all functionality is in `services/auth.ts`.
+- `src/components/RollLookup.tsx` — confirm no stale import
+- InsForge-to-Supabase migration done. The old `@insforge/sdk` client (`insforge.database.from(...)`) has been replaced with `@supabase/supabase-js` (`supabase.from(...)`). The API is near-identical.

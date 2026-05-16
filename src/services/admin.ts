@@ -381,22 +381,32 @@ export async function approveRegistration(id: string): Promise<Registration> {
     .eq("id", id);
   if (updateErr) throw new Error(updateErr.message);
 
-  // Copy avatar_emoji and email from registration to participant if participant exists
-  if (registration.avatar_emoji || registration.email) {
-    const { data: participants } = await insforge.database
-      .from("participants")
-      .select("id")
-      .eq("roll", registration.roll)
-      .limit(1);
-    if (participants && participants.length > 0) {
-      const updates: Record<string, any> = {};
-      if (registration.avatar_emoji) updates.avatar_emoji = registration.avatar_emoji;
-      if (registration.email) updates.email = registration.email;
+  // Find existing participant by roll or create a new one from registration data
+  const { data: existing } = await insforge.database
+    .from("participants")
+    .select("id")
+    .eq("roll", registration.roll)
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    const updates: Record<string, any> = {};
+    if (registration.name) updates.name = registration.name;
+    if (registration.email) updates.email = registration.email;
+    if (registration.avatar_emoji) updates.avatar_emoji = registration.avatar_emoji;
+    if (Object.keys(updates).length > 0) {
       await insforge.database
         .from("participants")
         .update(updates)
-        .eq("id", (participants[0] as any).id);
+        .eq("id", (existing[0] as any).id);
     }
+  } else {
+    await insforge.database.from("participants").insert([{
+      name: registration.name,
+      roll: registration.roll,
+      email: registration.email,
+      avatar_emoji: registration.avatar_emoji ?? null,
+      is_leader: false,
+    }]);
   }
 
   return { ...registration, approved: true };

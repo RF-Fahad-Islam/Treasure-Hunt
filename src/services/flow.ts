@@ -9,6 +9,10 @@ export interface TeamFlowStep {
   arrivalApproved: boolean;
   miniGamePlayed: boolean;
   hasMiniGame: boolean;
+  arrivalPoints: number;
+  miniGamePoints: number;
+  basePoints: number;
+  penaltySeconds: number;
 }
 
 export interface DetailedTeam {
@@ -44,7 +48,7 @@ export async function fetchAllDetailedTeams(): Promise<DetailedTeam[]> {
   // 2. Fetch all team routes in one go
   const allRoutesRes = await insforge.database
     .from("team_routes")
-    .select("team_id, route_order, status, clue_id, arrival_approved, mini_game_played, clue_started_at")
+    .select("team_id, route_order, status, clue_id, arrival_approved, mini_game_played, clue_started_at, arrival_points, mini_game_score, points_awarded, penalty_seconds")
     .order("route_order");
 
   if (allRoutesRes.error) throw new Error(allRoutesRes.error.message);
@@ -106,6 +110,10 @@ export async function fetchAllDetailedTeams(): Promise<DetailedTeam[]> {
         arrivalApproved: !!r.arrival_approved,
         miniGamePlayed: !!r.mini_game_played,
         hasMiniGame: s.has_mini_game,
+        arrivalPoints: r.arrival_points ?? 0,
+        miniGamePoints: r.mini_game_score ?? 0,
+        basePoints: Math.max(0, (r.points_awarded ?? 0) - (r.mini_game_score ?? 0)),
+        penaltySeconds: r.penalty_seconds ?? 0,
       };
     });
 
