@@ -87,7 +87,7 @@ export default function TeamDashboardPage() {
   const huntStartsIn = countdown ? `${countdown.d > 0 ? `${countdown.d}d ` : ""}${countdown.h}h ${countdown.m}m ${countdown.s}s` : null;
 
   const me = teamMembers.find(p => p.id === (session?.role === "team" ? session.participantId : null));
-  const isLeader = me?.is_leader === true;
+  const isLeader = (session?.role === "team" && session.isLeader) || (me?.is_leader === true);
   const isDisqualified = data?.team.is_disqualified === true;
 
   const teamSeed = data?.team.avatar_seed || data?.team.name || "Team";
@@ -197,7 +197,9 @@ export default function TeamDashboardPage() {
       await updateTeamName(teamId, nameInput.trim());
       setShowNameEdit(false);
       await load();
-    } catch { /* silent */ }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update team name");
+    }
   };
 
   const handleTeamAvatarSave = async (seed: string) => {

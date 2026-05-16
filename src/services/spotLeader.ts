@@ -1,5 +1,5 @@
 import { insforge } from "@/lib/insforge";
-import { secondsToPenaltyPoints, calculateWeightedPenaltySeconds } from "@/lib/penalty";
+import { secondsToPenaltyPoints } from "@/lib/penalty";
 import type { Team, Spot, ClueDefinition, TeamRoute } from "@/types";
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -13,6 +13,7 @@ export interface ArrivingTeam {
   clueText: string;
   clueStartedAt: string | null;
   helpActivatedAt: string | null;
+  timeoutAcknowledgedAt: string | null;
   timeElapsedMinutes: number;
   fullRoute: { 
     spotId: string;
@@ -68,6 +69,7 @@ export interface SpotLeaderData {
   globalClues: ClueDefinition[];
   leaderboard: { teamName: string; points: number; completed: boolean }[];
   broadcasts: Broadcast[];
+  clueTimeLimitMinutes: number;
 }
 
 /* Mini-game points options: 10-100 in steps of 10 */
@@ -104,7 +106,7 @@ export async function fetchSpotLeaderData(spotId: string): Promise<SpotLeaderDat
 
     const routeRes = await insforge.database
       .from("team_routes")
-      .select("id, clue_id, route_order, status, clue_started_at, help_activated_at, arrival_approved, arrival_approved_at, arrival_points, mini_game_started, mini_game_started_at, mini_game_score, mini_game_played")
+      .select("id, clue_id, route_order, status, clue_started_at, help_activated_at, timeout_acknowledged_at, arrival_approved, arrival_approved_at, arrival_points, mini_game_started, mini_game_started_at, mini_game_score, mini_game_played")
       .eq("team_id", team.id)
       .eq("route_order", currentIdx)
       .single();
@@ -206,6 +208,7 @@ export async function fetchSpotLeaderData(spotId: string): Promise<SpotLeaderDat
       clueText: clue.clue_text,
       clueStartedAt: route.clue_started_at,
       helpActivatedAt: route.help_activated_at ?? null,
+      timeoutAcknowledgedAt: route.timeout_acknowledged_at ?? null,
       timeElapsedMinutes: elapsed,
       fullRoute,
       arrivalApproved: route.arrival_approved ?? false,
@@ -224,12 +227,17 @@ export async function fetchSpotLeaderData(spotId: string): Promise<SpotLeaderDat
   }
 
   // Fetch Global Data
-  const [spotsRes, cluesRes, leaderboardRes, broadcastsRes] = await Promise.all([
+  const [spotsRes, cluesRes, leaderboardRes, broadcastsRes, eventConfigRes] = await Promise.all([
     insforge.database.from("spots").select("*").order("name"),
     insforge.database.from("clues").select("*").order("created_at"),
     insforge.database.from("teams").select("name, total_points, total_penalty_seconds, hunt_completed"),
-    insforge.database.from("broadcasts").select("*").order("created_at", { ascending: false }).limit(20)
+    insforge.database.from("broadcasts").select("*").order("created_at", { ascending: false }).limit(20),
+    insforge.database.from("event_config").select("clue_time_limit_minutes").limit(1)
   ]);
+
+  const clueTimeLimitMinutes = !eventConfigRes.error && eventConfigRes.data && eventConfigRes.data.length > 0
+    ? (eventConfigRes.data[0] as any).clue_time_limit_minutes ?? 40
+    : 40;
 
   const leaderboard = (leaderboardRes.data ?? [])
     .map((t: any) => ({
@@ -246,7 +254,8 @@ export async function fetchSpotLeaderData(spotId: string): Promise<SpotLeaderDat
     globalSpots: spotsRes.data ?? [],
     globalClues: cluesRes.data ?? [],
     leaderboard,
-    broadcasts: broadcastsRes.data ?? []
+    broadcasts: broadcastsRes.data ?? [],
+    clueTimeLimitMinutes,
   };
 }
 
@@ -348,10 +357,10 @@ export async function completeMiniGame(
   // Fetch current route to check arrival approval + timing
   const routeRes = await insforge.database
     .from("team_routes")
-    .select("arrival_approved, arrival_approved_at, clue_started_at, clue_solved_at, help_activated_at, timeout_acknowledged_at, points_awarded")
+    .select("arrival_approved, arrival_approved_at, clue_started_at, points_awarded")
     .eq("id", routeId)
     .single();
-  
+
   if (routeRes.error || !routeRes.data) throw new Error("Route not found");
   const route = routeRes.data as any;
 
@@ -370,13 +379,10 @@ export async function completeMiniGame(
     throw new Error(`Please wait ${remainingMin} more minute(s) before awarding mini-game points (minimum 20 min).`);
   }
 
-  // Auto penalty: uses weighted calculation based on acknowledgment timestamp
+  // Auto penalty: 1 point per 4 minutes elapsed since clue start (flat rate)
   const now = new Date().toISOString();
-  const totalPenaltySec = calculateWeightedPenaltySeconds(
-    route.clue_started_at,
-    now,
-    route.timeout_acknowledged_at
-  );
+  const elapsedMs = Date.now() - new Date(route.clue_started_at).getTime();
+  const totalPenaltySec = Math.max(0, Math.floor(elapsedMs / 1000));
 
   const teamRes = await insforge.database
     .from("teams")
