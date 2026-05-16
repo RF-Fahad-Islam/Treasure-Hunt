@@ -154,7 +154,7 @@ export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
     rank: i + 1,
     name: t.name,
     score: Math.max(0, (t.total_points ?? 0) - secondsToPenaltyPoints(t.total_penalty_seconds ?? 0)),
-    penalty: t.total_penalty_seconds ?? 0,
+    penalty: secondsToPenaltyPoints(t.total_penalty_seconds ?? 0),
     completed: t.hunt_completed ?? false,
     avatarSeed: t.avatar_seed || t.name,
   }));

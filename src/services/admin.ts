@@ -186,8 +186,8 @@ export async function saveRoutes(
       team_id: teamId,
       clue_id: r.clueId,
       route_order: r.order,
-      status: r.order === 0 ? "active" : "pending",
-      clue_started_at: r.order === 0 ? new Date().toISOString() : null,
+      status: "pending",
+      clue_started_at: null,
     }));
 
     if (rows.length === 0) continue; // Skip empty routes
@@ -211,8 +211,8 @@ export async function deployTeamRoute(teamId: string, clueIds: string[]): Promis
     team_id: teamId,
     clue_id: clueId,
     route_order: idx,
-    status: idx === 0 ? "active" : "pending",
-    clue_started_at: idx === 0 ? new Date().toISOString() : null,
+    status: "pending",
+    clue_started_at: null,
   }));
 
   const { error } = await insforge.database.from("team_routes").insert(rows);
@@ -351,6 +351,42 @@ export async function updateEventConfig(data: Partial<EventConfig>): Promise<voi
   } else {
     const { error } = await insforge.database.from("event_config").insert([data]);
     if (error) throw new Error(`Failed to create event config: ${error.message}`);
+  }
+}
+
+/* ─── Hunt lifecycle ────────────────────────────────────────── */
+
+export async function startHunt(): Promise<void> {
+  const now = new Date().toISOString();
+
+  const { error: cfgErr } = await insforge.database
+    .from("event_config")
+    .update({
+      hunt_started: true,
+      hunt_started_at: now,
+    })
+    .eq("id", (await fetchEventConfig())?.id ?? "");
+
+  if (cfgErr) throw new Error(`Failed to update config: ${cfgErr.message}`);
+
+  const { data: teams, error: teamsErr } = await insforge.database
+    .from("teams")
+    .select("id")
+    .neq("is_disqualified", true);
+
+  if (teamsErr) throw new Error(teamsErr.message);
+
+  for (const team of teams ?? []) {
+    const { error: routeErr } = await insforge.database
+      .from("team_routes")
+      .update({
+        status: "active",
+        clue_started_at: now,
+      })
+      .eq("team_id", (team as any).id)
+      .eq("route_order", 0);
+
+    if (routeErr) throw new Error(`Failed to start route for team ${(team as any).id}: ${routeErr.message}`);
   }
 }
 

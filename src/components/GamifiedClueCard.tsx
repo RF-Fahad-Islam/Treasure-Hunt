@@ -11,6 +11,7 @@ interface Props {
   clueStartedAt: string | null;
   helpActivatedAt?: string | null;
   timeoutAckAt?: string | null;
+  clueSolvedAt?: string | null;
   timeLimitMinutes: number;
   onTimeout: () => void;
   showTimeout: boolean;
@@ -20,7 +21,7 @@ interface Props {
 
 export function GamifiedClueCard({
   clueDefinition, spot, completedClues, totalClues,
-  streak, clueStartedAt, helpActivatedAt, timeoutAckAt, timeLimitMinutes, onTimeout, showTimeout,
+  streak, clueStartedAt, helpActivatedAt, timeoutAckAt, clueSolvedAt, timeLimitMinutes, onTimeout, showTimeout,
   locked, huntStartsIn,
 }: Props) {
   const progress = totalClues > 0 ? (completedClues / totalClues) * 100 : 0;
@@ -55,19 +56,6 @@ export function GamifiedClueCard({
               <span className="text-[13px] font-extrabold" style={{ color: "#FFC800" }}>⏳ Starts in {huntStartsIn}</span>
             </div>
           )}
-          <div className="mt-4 flex items-center justify-center gap-2">
-            <span className="rounded-xl px-3 py-1.5 text-[12px] font-extrabold uppercase tracking-wide" style={{ background: "rgba(28,176,246,0.1)", color: "#1CB0F6" }}>
-              📍 {spot.name}
-            </span>
-          </div>
-          {clueDefinition.image_url && (
-            <div className="mt-4 rounded-2xl overflow-hidden opacity-50">
-              <img src={clueDefinition.image_url} alt="Clue visual" className="w-full object-cover" style={{ maxHeight: 160 }} />
-            </div>
-          )}
-          <p className="mt-4 text-[16px] font-black opacity-40 select-none" style={{ color: "#2B2B2B" }}>
-            {clueDefinition.clue_text}
-          </p>
         </div>
       </div>
     );
@@ -116,6 +104,7 @@ export function GamifiedClueCard({
             timeLimitMinutes={timeLimitMinutes}
             onTimeout={onTimeout}
             paused={showTimeout}
+            solvedAt={clueSolvedAt}
           />
         </div>
 

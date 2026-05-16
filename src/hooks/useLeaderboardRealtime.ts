@@ -3,7 +3,7 @@ import { insforge } from "@/lib/insforge";
 import { secondsToPenaltyPoints } from "@/lib/penalty";
 import type { LeaderboardEntry } from "@/services/team";
 
-export function useLeaderboard(): LeaderboardEntry[] {
+export function useLeaderboard(): LeaderboardEntry[] & { refresh: () => Promise<void> } {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
 
   const deriveRanks = useCallback((rows: LeaderboardEntry[]): LeaderboardEntry[] =>
@@ -37,5 +37,5 @@ export function useLeaderboard(): LeaderboardEntry[] {
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  return entries;
+  return Object.assign(entries, { refresh: fetch });
 }

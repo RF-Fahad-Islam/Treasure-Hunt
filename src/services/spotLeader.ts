@@ -291,33 +291,47 @@ export async function approveArrival(
 ): Promise<{ pointsAwarded: number }> {
   const teamRes = await insforge.database
     .from("teams")
-    .select("total_points")
+    .select("total_points, total_penalty_seconds")
     .eq("id", teamId)
     .single();
 
   if (teamRes.error) throw new Error("Team not found");
-  const currentPoints = (teamRes.data as any).total_points ?? 0;
+  const teamData = teamRes.data as any;
+  const currentPoints = teamData.total_points ?? 0;
+  const currentPenalty = teamData.total_penalty_seconds ?? 0;
 
-  // Check if help/hint was used
+  // Check if help/hint was used and get timer data for penalty calc
   const routeRes = await insforge.database
     .from("team_routes")
-    .select("help_activated_at")
+    .select("help_activated_at, clue_started_at, timeout_acknowledged_at")
     .eq("id", routeId)
     .single();
 
   if (routeRes.error) throw new Error("Route not found");
-  const usedHint = !!(routeRes.data as any)?.help_activated_at;
+  const routeData = routeRes.data as any;
+  const usedHint = !!(routeData)?.help_activated_at;
 
   const pointsAwarded = usedHint ? 0 : CLUE_POINTS;
   const now = new Date().toISOString();
 
+  // Calculate penalty up to arrival — stops the timer
+  const totalPenaltySec = calculateWeightedPenaltySeconds(
+    routeData.clue_started_at,
+    now,
+    routeData.timeout_acknowledged_at
+  );
+
   const r1 = await insforge.database
     .from("team_routes")
     .update({
+      clue_solved_at: now,
       arrival_approved: true,
       arrival_approved_at: now,
       arrival_points: pointsAwarded,
       points_awarded: pointsAwarded,
+      penalty_seconds: totalPenaltySec,
+      mini_game_started: true,
+      mini_game_started_at: now,
     })
     .eq("id", routeId);
 
@@ -325,7 +339,10 @@ export async function approveArrival(
 
   const r2 = await insforge.database
     .from("teams")
-    .update({ total_points: currentPoints + pointsAwarded })
+    .update({
+      total_points: currentPoints + pointsAwarded,
+      total_penalty_seconds: currentPenalty + totalPenaltySec,
+    })
     .eq("id", teamId);
 
   if (r2.error) throw new Error(r2.error.message);
@@ -357,7 +374,7 @@ export async function completeMiniGame(
   // Fetch current route to check arrival approval + timing + weights
   const routeRes = await insforge.database
     .from("team_routes")
-    .select("arrival_approved, arrival_approved_at, clue_started_at, points_awarded, timeout_acknowledged_at, help_activated_at")
+    .select("arrival_approved, arrival_approved_at, clue_started_at, clue_solved_at, penalty_seconds, points_awarded, timeout_acknowledged_at, help_activated_at")
     .eq("id", routeId)
     .single();
 
@@ -379,11 +396,13 @@ export async function completeMiniGame(
     throw new Error(`Please wait ${remainingMin} more minute(s) before awarding mini-game points (minimum 20 min).`);
   }
 
-  // Weighted penalty: 1pt/4min normally, 1pt/2min after timeout ack
+  // Use existing clue_solved_at if already set by approveArrival, otherwise now
   const now = new Date().toISOString();
-  const totalPenaltySec = calculateWeightedPenaltySeconds(
+  const solvedAt = route.clue_solved_at ?? now;
+  const penaltyAlreadyApplied = route.penalty_seconds != null;
+  const totalPenaltySec = route.penalty_seconds ?? calculateWeightedPenaltySeconds(
     route.clue_started_at,
-    now,
+    solvedAt,
     route.timeout_acknowledged_at
   );
 
@@ -419,7 +438,7 @@ export async function completeMiniGame(
     .update({
       status: "completed",
       approved_by_spot_leader: true,
-      clue_solved_at: now,
+      clue_solved_at: route.clue_solved_at ?? now,
       mini_game_played: true,
       mini_game_points: miniGamePoints,
       mini_game_score: miniGamePoints,
@@ -435,7 +454,7 @@ export async function completeMiniGame(
     .update({
       current_clue_index: nextIdx,
       total_points: currentPoints + pointsToAdd,
-      total_penalty_seconds: currentPenalty + totalPenaltySec,
+      total_penalty_seconds: currentPenalty + (penaltyAlreadyApplied ? 0 : totalPenaltySec),
       hunt_completed: !hasNextClue,
     })
     .eq("id", teamId);
@@ -443,6 +462,99 @@ export async function completeMiniGame(
   if (r2.error) throw new Error(r2.error.message);
 
   // Start next clue timer
+  if (hasNextClue) {
+    const r3 = await insforge.database
+      .from("team_routes")
+      .update({
+        status: "active",
+        clue_started_at: now,
+      })
+      .eq("team_id", teamId)
+      .eq("route_order", nextIdx);
+
+    if (r3.error) throw new Error(r3.error.message);
+  }
+}
+
+/* ─── Step 2b: Skip Mini-Game (no wait, advance immediately) ── */
+
+export async function skipMiniGame(
+  routeId: string,
+  teamId: string,
+): Promise<void> {
+  const routeRes = await insforge.database
+    .from("team_routes")
+    .select("clue_started_at, clue_solved_at, penalty_seconds, timeout_acknowledged_at, arrival_approved")
+    .eq("id", routeId)
+    .single();
+
+  if (routeRes.error || !routeRes.data) throw new Error("Route not found");
+  const route = routeRes.data as any;
+
+  if (!route.arrival_approved)
+    throw new Error("Arrival must be approved first.");
+
+  const now = new Date().toISOString();
+  const solvedAt = route.clue_solved_at ?? now;
+  const totalPenaltySec = route.penalty_seconds ?? calculateWeightedPenaltySeconds(
+    route.clue_started_at,
+    solvedAt,
+    route.timeout_acknowledged_at
+  );
+
+  const teamRes = await insforge.database
+    .from("teams")
+    .select("current_clue_index, total_points, total_penalty_seconds")
+    .eq("id", teamId)
+    .single();
+
+  if (teamRes.error) throw new Error("Team not found");
+  const team = teamRes.data as Team;
+
+  const currentIdx = team.current_clue_index ?? 0;
+  const currentPoints = team.total_points ?? 0;
+  const currentPenalty = team.total_penalty_seconds ?? 0;
+  const nextIdx = currentIdx + 1;
+
+  const nextRouteRes = await insforge.database
+    .from("team_routes")
+    .select("route_order")
+    .eq("team_id", teamId)
+    .eq("route_order", nextIdx)
+    .maybeSingle();
+
+  const hasNextClue = !nextRouteRes.error && nextRouteRes.data;
+
+  const penaltyAlreadyApplied = route.penalty_seconds != null;
+
+  const r1 = await insforge.database
+    .from("team_routes")
+    .update({
+      status: "completed",
+      approved_by_spot_leader: true,
+      clue_solved_at: route.clue_solved_at ?? now,
+      mini_game_played: true,
+      mini_game_points: 0,
+      mini_game_score: 0,
+      points_awarded: route.points_awarded ?? 0,
+      penalty_seconds: totalPenaltySec,
+    })
+    .eq("id", routeId);
+
+  if (r1.error) throw new Error(r1.error.message);
+
+  const r2 = await insforge.database
+    .from("teams")
+    .update({
+      current_clue_index: nextIdx,
+      total_points: currentPoints,
+      total_penalty_seconds: currentPenalty + (penaltyAlreadyApplied ? 0 : totalPenaltySec),
+      hunt_completed: !hasNextClue,
+    })
+    .eq("id", teamId);
+
+  if (r2.error) throw new Error(r2.error.message);
+
   if (hasNextClue) {
     const r3 = await insforge.database
       .from("team_routes")

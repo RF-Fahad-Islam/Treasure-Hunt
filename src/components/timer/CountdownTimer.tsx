@@ -7,12 +7,14 @@ interface Props {
   timeLimitMinutes: number;
   onTimeout: () => void;
   paused?: boolean;
+  solvedAt?: string | null;
 }
 
-export function CountdownTimer({ startedAt, timeoutAckAt, timeLimitMinutes, onTimeout, paused }: Props) {
+export function CountdownTimer({ startedAt, timeoutAckAt, timeLimitMinutes, onTimeout, paused, solvedAt }: Props) {
   const [remaining, setRemaining] = useState<number>(0);
   const [elapsedAck, setElapsedAck] = useState<number>(0);
   const [expired, setExpired] = useState(false);
+  const [solvedRemaining, setSolvedRemaining] = useState<number>(0);
 
   useEffect(() => {
     if (!startedAt) return;
@@ -21,6 +23,7 @@ export function CountdownTimer({ startedAt, timeoutAckAt, timeLimitMinutes, onTi
     const limitMs = timeLimitMinutes * 60 * 1000;
     const startMs = new Date(startedAt).getTime();
     const ackMs = timeoutAckAt ? new Date(timeoutAckAt).getTime() : null;
+    const solvedMs = solvedAt ? new Date(solvedAt).getTime() : null;
 
     function tick() {
       const now = Date.now();
@@ -32,7 +35,11 @@ export function CountdownTimer({ startedAt, timeoutAckAt, timeLimitMinutes, onTi
         setElapsedAck(Math.max(0, now - ackMs));
       }
 
-      if (left <= 0 && !expired && !timeoutAckAt) {
+      if (solvedMs) {
+        setSolvedRemaining(Math.max(0, limitMs - (solvedMs - startMs)));
+      }
+
+      if (left <= 0 && !expired && !timeoutAckAt && !solvedAt) {
         setExpired(true);
         onTimeout();
       }
@@ -41,7 +48,33 @@ export function CountdownTimer({ startedAt, timeoutAckAt, timeLimitMinutes, onTi
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [startedAt, timeoutAckAt, timeLimitMinutes, paused, expired, onTimeout]);
+  }, [startedAt, timeoutAckAt, timeLimitMinutes, paused, expired, onTimeout, solvedAt]);
+
+  // If the clue is solved, show a frozen time-remaining display
+  if (solvedAt) {
+    const totalSec = Math.ceil(solvedRemaining / 1000);
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    const display = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+
+    return (
+      <motion.div
+        className="flex flex-col items-center gap-1"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <span className="text-[11px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "#58CC02" }}>
+          ✓ Solved
+        </span>
+        <span
+          className="font-display text-[42px] font-extrabold leading-none tabular-nums"
+          style={{ color: "#58CC02" }}
+        >
+          {display}
+        </span>
+      </motion.div>
+    );
+  }
 
   // If we have acknowledged the timeout, show a count-up timer
   if (timeoutAckAt) {

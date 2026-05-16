@@ -121,6 +121,7 @@ export default function TeamDashboardPage() {
       try {
         const d = await fetchDashboardData(teamId);
         setData(d);
+        leaderboard.refresh();
       } catch (err) {
         // silently ignore polling errors
       }
@@ -406,6 +407,7 @@ export default function TeamDashboardPage() {
                         totalClues={data.totalClues}
                         streak={streakCountRef.current}
                         clueStartedAt={data.currentRoute?.clue_started_at ?? null}
+                        clueSolvedAt={data.currentRoute?.clue_solved_at ?? null}
                         timeLimitMinutes={data.eventConfig?.clue_time_limit_minutes ?? 40}
                         onTimeout={handleTimeout}
                         showTimeout={showTimeout}
@@ -451,7 +453,7 @@ export default function TeamDashboardPage() {
                           label="Penalty"
                           value={`-${secondsToPenaltyPoints(
                             (data.team.total_penalty_seconds ?? 0) + 
-                            (data.currentRoute ? calculateWeightedPenaltySeconds(
+                            (data.currentRoute && !data.currentRoute.clue_solved_at ? calculateWeightedPenaltySeconds(
                               data.currentRoute.clue_started_at,
                               data.currentRoute.clue_solved_at,
                               data.currentRoute.timeout_acknowledged_at
@@ -504,6 +506,7 @@ export default function TeamDashboardPage() {
                         clueStartedAt={data.currentRoute?.clue_started_at ?? null}
                         helpActivatedAt={data.currentRoute?.help_activated_at ?? null}
                         timeoutAckAt={data.currentRoute?.timeout_acknowledged_at ?? null}
+                        clueSolvedAt={data.currentRoute?.clue_solved_at ?? null}
                         timeLimitMinutes={data.eventConfig?.clue_time_limit_minutes ?? 40}
                         onTimeout={handleTimeout}
                         showTimeout={showTimeout}

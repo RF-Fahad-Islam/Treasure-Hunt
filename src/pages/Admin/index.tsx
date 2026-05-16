@@ -34,6 +34,7 @@ import {
   updateTeam,
   resetTeam,
   resetAllHuntData,
+  startHunt,
   fetchTeamRoutes,
 } from "@/services/admin";
 import { fetchActiveSessions, adminDeactivateSession, generateLoginToken } from "@/services/auth";
@@ -183,6 +184,8 @@ export default function AdminPage() {
   const [clueImageUploading, setClueImageUploading] = useState(false);
   const [clueImagePreview, setClueImagePreview] = useState<string | null>(null);
   const [filterSpot, setFilterSpot] = useState("");
+  const [editingTeam, setEditingTeam] = useState<string | null>(null);
+  const [editTeamName, setEditTeamName] = useState("");
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -300,6 +303,48 @@ export default function AdminPage() {
 
     return (
       <div className="flex flex-col gap-5">
+        {/* Start Hunt card — always visible when teams exist */}
+        {teams.length > 0 && !eventConfig?.hunt_started && (
+          <div
+            className="rounded-[24px] p-6 sm:p-8 text-center"
+            style={{
+              background: "linear-gradient(135deg, #1CB0F6, #0f7ac0)",
+              boxShadow: "0 8px 0 #0f4a9e, 0 16px 32px -8px rgba(0,0,0,0.2)",
+            }}
+          >
+            <p className="text-5xl mb-2">🚀</p>
+            <p className="text-[20px] sm:text-[24px] font-black text-white mb-1">
+              Teams are ready!
+            </p>
+            <p className="text-[14px] font-semibold text-white/80 mb-6">
+              {teams.length} teams generated &mdash; start the hunt to begin timing for all teams simultaneously.
+            </p>
+            <button
+              data-sound="confirm"
+              onClick={() => {
+                setConfirmDef({
+                  title: "Start Hunt",
+                  message: `Start the timer for all ${teams.length} teams simultaneously? They will begin at their first clue.`,
+                });
+                setConfirmHandler(() => async () => {
+                  try {
+                    await startHunt();
+                    flash("🚀 Hunt started! All timers are running.");
+                    await loadData();
+                  } catch { flashError("Failed to start hunt"); }
+                });
+              }}
+              className="btn-press ripple rounded-[24px] px-12 py-5 text-[18px] font-black uppercase tracking-wide text-white transition-all"
+              style={{
+                background: "#FFC800",
+                boxShadow: "0 6px 0 #B88600",
+              }}
+            >
+              🚀 Start Hunt
+            </button>
+          </div>
+        )}
+
         {/* Thin status bar */}
         <div
           className="flex items-center gap-1 overflow-x-auto rounded-2xl px-4 py-2.5 text-[12px] font-extrabold tabular-nums whitespace-nowrap scrollbar-none"
@@ -542,6 +587,16 @@ export default function AdminPage() {
     } catch (err) { flashError(err instanceof Error ? err.message : "Save failed"); } finally { setLoading(false); }
   }
 
+  async function handleUpdateTeamName(id: string) {
+    if (!editTeamName.trim()) return;
+    try {
+      await updateTeam(id, { name: editTeamName.trim() });
+      flash("✅ Team name updated");
+      setEditingTeam(null);
+      await loadData();
+    } catch { flashError("Update failed"); }
+  }
+
   function renderTeamList() {
     return (
         <div className="grid gap-6">
@@ -561,8 +616,22 @@ export default function AdminPage() {
                   <div className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-white text-[20px] shadow-sm shrink-0" style={{ background: t.hunt_completed ? "linear-gradient(135deg, #FFC800, #F59E0B)" : "linear-gradient(135deg, #1CB0F6, #0077CC)" }}>
                     {t.name.charAt(0)}
                   </div>
-                  <div className="min-w-0">
-                    <span className="font-display text-[20px] font-black truncate block" style={{ color: t.is_disqualified ? "var(--fg-muted)" : "var(--fg)" }}>{t.name}</span>
+                  <div className="min-w-0 flex-1">
+                    {editingTeam === t.id ? (
+                      <div className="flex gap-2 items-center">
+                        <input
+                          value={editTeamName}
+                          onChange={(e) => setEditTeamName(e.target.value)}
+                          className="flex-1 rounded-xl border-2 px-3 py-1.5 text-[16px] font-black outline-none"
+                          style={{ background: "var(--surface)", borderColor: "var(--color-brand-blue)", color: "var(--fg)" }}
+                          autoFocus
+                        />
+                        <button onClick={() => handleUpdateTeamName(t.id)} className="p-2 rounded-xl bg-green-500 text-white" title="Save">💾</button>
+                        <button onClick={() => setEditingTeam(null)} className="p-2 rounded-xl bg-gray-200 text-gray-600" title="Cancel">✕</button>
+                      </div>
+                    ) : (
+                      <span className="font-display text-[20px] font-black truncate block" style={{ color: t.is_disqualified ? "var(--fg-muted)" : "var(--fg)" }}>{t.name}</span>
+                    )}
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <div className="flex items-center gap-1">
                         <span className={`rounded-xl px-3 py-1 text-[11px] font-black uppercase tracking-wider ${t.is_disqualified ? "opacity-50" : ""}`} style={{ background: "rgba(88,204,2,0.12)", color: "var(--color-brand-green)" }}>🏷 {t.team_code}</span>
@@ -603,7 +672,12 @@ export default function AdminPage() {
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
+                   <div className="flex gap-2">
+                    {editingTeam !== t.id && (
+                      <button onClick={() => { setEditingTeam(t.id); setEditTeamName(t.name); }} className="btn-press flex h-10 w-10 items-center justify-center rounded-xl transition-all" style={{ background: "rgba(28,176,246,0.1)", color: "var(--color-brand-blue)" }}>
+                        ✏️
+                      </button>
+                    )}
                     <button onClick={() => {
                       setConfirmDef({ title: "Reset Team", message: `Reset ${t.name}? All progress, points, and penalties will be cleared.`, destructive: true });
                       setConfirmHandler(() => async () => {
@@ -677,6 +751,47 @@ export default function AdminPage() {
           </div>
         )}
 
+        {teams.length > 0 && !eventConfig?.hunt_started && (
+          <div
+            className="rounded-[24px] p-6 sm:p-8 text-center"
+            style={{
+              background: "linear-gradient(135deg, #1CB0F6, #0f7ac0)",
+              boxShadow: "0 8px 0 #0f4a9e, 0 16px 32px -8px rgba(0,0,0,0.2)",
+            }}
+          >
+            <p className="text-5xl mb-2">🚀</p>
+            <p className="text-[20px] sm:text-[24px] font-black text-white mb-1">
+              Teams are ready!
+            </p>
+            <p className="text-[14px] font-semibold text-white/80 mb-6">
+              {teams.length} teams generated &mdash; start the hunt to begin timing for all teams simultaneously.
+            </p>
+            <button
+              data-sound="confirm"
+              onClick={() => {
+                setConfirmDef({
+                  title: "Start Hunt",
+                  message: `Start the timer for all ${teams.length} teams simultaneously? They will begin at their first clue.`,
+                });
+                setConfirmHandler(() => async () => {
+                  try {
+                    await startHunt();
+                    flash("🚀 Hunt started! All timers are running.");
+                    await loadData();
+                  } catch { flashError("Failed to start hunt"); }
+                });
+              }}
+              className="btn-press ripple rounded-[24px] px-12 py-5 text-[18px] font-black uppercase tracking-wide text-white transition-all"
+              style={{
+                background: "#FFC800",
+                boxShadow: "0 6px 0 #B88600",
+              }}
+            >
+              🚀 Start Hunt
+            </button>
+          </div>
+        )}
+
         <div className="card p-6" style={{ background: "var(--surface)" }}>
           <h3 className="mb-4 text-[15px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-blue)" }}>🏠 All Teams</h3>
           {renderTeamList()}
@@ -688,6 +803,47 @@ export default function AdminPage() {
   function renderRoutes() {
     return (
       <div className="flex flex-col gap-8">
+        {teams.length > 0 && !eventConfig?.hunt_started && (
+          <div
+            className="rounded-[24px] p-6 sm:p-8 text-center"
+            style={{
+              background: "linear-gradient(135deg, #1CB0F6, #0f7ac0)",
+              boxShadow: "0 8px 0 #0f4a9e, 0 16px 32px -8px rgba(0,0,0,0.2)",
+            }}
+          >
+            <p className="text-5xl mb-2">🚀</p>
+            <p className="text-[20px] sm:text-[24px] font-black text-white mb-1">
+              Teams are ready!
+            </p>
+            <p className="text-[14px] font-semibold text-white/80 mb-6">
+              {teams.length} teams generated &mdash; start the hunt to begin timing for all teams simultaneously.
+            </p>
+            <button
+              data-sound="confirm"
+              onClick={() => {
+                setConfirmDef({
+                  title: "Start Hunt",
+                  message: `Start the timer for all ${teams.length} teams simultaneously? They will begin at their first clue.`,
+                });
+                setConfirmHandler(() => async () => {
+                  try {
+                    await startHunt();
+                    flash("🚀 Hunt started! All timers are running.");
+                    await loadData();
+                  } catch { flashError("Failed to start hunt"); }
+                });
+              }}
+              className="btn-press ripple rounded-[24px] px-12 py-5 text-[18px] font-black uppercase tracking-wide text-white transition-all"
+              style={{
+                background: "#FFC800",
+                boxShadow: "0 6px 0 #B88600",
+              }}
+            >
+              🚀 Start Hunt
+            </button>
+          </div>
+        )}
+
         <div className="card p-6 border-t-[8px]" style={{ background: "var(--surface)", borderColor: "var(--color-brand-blue)" }}>
           <h3 className="mb-3 text-[16px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--color-brand-blue)" }}>🗺️ Route Plan Creator</h3>
           <p className="mb-6 text-[14px] font-semibold" style={{ color: "var(--fg-muted)" }}>Select a team to deploy a custom route flow.</p>

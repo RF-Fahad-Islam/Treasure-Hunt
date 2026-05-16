@@ -9,8 +9,10 @@ import { SuccessOverlay } from "@/components/SuccessOverlay";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { getAvatarUrl } from "@/lib/avatar";
 import { useSession, useAuthStore } from "@/store/authStore";
-import { fetchSpotLeaderData, approveArrival, completeMiniGame, MINI_GAME_POINTS } from "@/services/spotLeader";
+import { fetchSpotLeaderData, approveArrival, completeMiniGame, skipMiniGame, MINI_GAME_POINTS } from "@/services/spotLeader";
 import { insertNotification } from "@/services/notifications";
+import { useLeaderboard } from "@/hooks/useLeaderboardRealtime";
+import { Leaderboard } from "@/components/leaderboard/Leaderboard";
 import type { SpotLeaderData, ArrivingTeam } from "@/services/spotLeader";
 
 export default function SpotLeaderPage() {
@@ -31,6 +33,8 @@ export default function SpotLeaderPage() {
   const [successTitle, setSuccessTitle] = useState("APPROVED!");
   const [successSubtitle, setSuccessSubtitle] = useState("Team awarded successfully");
   const [showGlobalView, setShowGlobalView] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const leaderboard = useLeaderboard();
   const [confirmDef, setConfirmDef] = useState<{ title: string; message: string; destructive?: boolean } | null>(null);
   const [confirmHandler, setConfirmHandler] = useState<((data?: any) => Promise<void>) | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
@@ -171,13 +175,15 @@ export default function SpotLeaderPage() {
     }
   };
 
-  const handleSkipMiniGame = async () => {
-    if (!miniGameTeam) return;
-    const { routeId, teamId } = miniGameTeam;
+  const handleSkipMiniGame = async (team?: ArrivingTeam) => {
+    const t = team ?? miniGameTeam;
+    if (!t) return;
+    const { routeId, teamId } = t;
+    setArrivalBusyId(teamId);
     setDialogBusy(true);
     setError(null);
     try {
-      await completeMiniGame(routeId, teamId, 0);
+      await skipMiniGame(routeId, teamId);
       triggerSuccess(teamId, 0, "CLUE COMPLETED!", "Team advanced to the next clue (0 bonus points)");
       insertNotification({
         team_id: teamId,
@@ -189,8 +195,9 @@ export default function SpotLeaderPage() {
       closeMiniGame();
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Mini-game approval failed");
+      setError(err instanceof Error ? err.message : "Skip failed");
     } finally {
+      setArrivalBusyId(null);
       setDialogBusy(false);
     }
   };
@@ -654,6 +661,21 @@ export default function SpotLeaderPage() {
                               ? "🎮 Award Mini-Game"
                               : `⏳ Wait ${getRemainingWaitMinutes(team)} min`}
                           </motion.button>
+                          <motion.button
+                            whileTap={{ scale: 0.92 }}
+                            onClick={() => handleSkipMiniGame(team)}
+                            disabled={arrivalBusyId === team.teamId}
+                            className="w-full sm:w-auto shrink-0 rounded-[20px] sm:rounded-[24px] px-8 sm:px-10 py-3.5 sm:py-6 text-[15px] sm:text-[17px] font-black uppercase tracking-wide transition-all"
+                            style={{
+                              background: "#58CC02",
+                              boxShadow: "0 4px 0 #3A8400",
+                              color: "#fff",
+                              opacity: arrivalBusyId === team.teamId ? 0.6 : 1,
+                              cursor: arrivalBusyId === team.teamId ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            {arrivalBusyId === team.teamId ? "⏳" : "⏭ Skip Mini-Game"}
+                          </motion.button>
                         </div>
                       )}
                     </div>
@@ -666,8 +688,59 @@ export default function SpotLeaderPage() {
 
 
 
+        {/* Leaderboard */}
+        <Reveal delay={0.16} duration={0.5}>
+          <div className="mb-8">
+            <button
+              onClick={() => setShowLeaderboard(!showLeaderboard)}
+              className="w-full rounded-[20px] p-4 text-left transition-all flex items-center justify-between gap-3"
+              style={{ background: "var(--surface)", boxShadow: "0 3px 0 var(--border-soft)" }}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🏆</span>
+                <div>
+                  <p className="text-[15px] font-black" style={{ color: "var(--fg)" }}>Leaderboard</p>
+                  <p className="text-[11px] font-extrabold uppercase tracking-wide" style={{ color: "var(--fg-muted)" }}>
+                    {leaderboard.length} teams
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  onClick={(e) => { e.stopPropagation(); leaderboard.refresh(); }}
+                  className="rounded-xl px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide cursor-pointer transition-all active:scale-90"
+                  style={{ background: "var(--border-soft)", color: "var(--fg-muted)" }}
+                >
+                  ⟳
+                </span>
+                <motion.span
+                  animate={{ rotate: showLeaderboard ? 180 : 0 }}
+                  className="text-xl opacity-40"
+                  style={{ color: "var(--fg-muted)" }}
+                >
+                  ▼
+                </motion.span>
+              </div>
+            </button>
+
+            <AnimatePresence>
+              {showLeaderboard && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="overflow-hidden pt-4"
+                >
+                  <Leaderboard entries={leaderboard} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </Reveal>
+
         <Reveal delay={0.2} duration={0.5}>
-          <p className="mt-12 text-center text-[13px] font-semibold" style={{ color: "var(--fg-muted)" }}>
+          <p className="mt-4 text-center text-[13px] font-semibold" style={{ color: "var(--fg-muted)" }}>
             Treasure Hunt · University of Dhaka — CSE
           </p>
         </Reveal>
@@ -825,7 +898,7 @@ export default function SpotLeaderPage() {
                   initial={{ y: 10, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ delay: 0.35 }}
-                  onClick={handleSkipMiniGame}
+                  onClick={() => handleSkipMiniGame()}
                   disabled={dialogBusy || !canAwardMiniGame(miniGameTeam)}
                   className="w-full rounded-2xl px-8 py-3.5 sm:py-4 text-[15px] sm:text-[16px] font-extrabold uppercase tracking-wide transition-all"
                   style={{
